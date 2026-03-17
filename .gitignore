@@ -1,0 +1,15 @@
+# 大文件
+*.zip
+*.tar
+*.gz
+
+# 数据集
+data/
+datasets/
+
+# Python
+__pycache__/
+*.pyc
+
+# Mac
+.DS_Store
