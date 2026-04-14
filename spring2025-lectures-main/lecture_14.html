@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecture 14</title>
+<script>
+MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #222;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #fff;
+}
+h1 { font-size: 2em;   border-bottom: 2px solid #e1e4e8; padding-bottom: .3em; margin-top: 1.6em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #e1e4e8; padding-bottom: .25em; margin-top: 1.6em; }
+h3 { font-size: 1.2em; margin-top: 1.4em; }
+h4, h5, h6 { margin-top: 1.2em; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: .4em; font-weight: 600; color: #111; }
+p  { margin: .45em 0; }
+ul, ol { margin: .4em 0; padding-left: 2.2em; }
+li { margin: .15em 0; }
+a  { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.img-wrap {
+    margin: 1.2em 0;
+    text-align: center;
+}
+.img-wrap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+/* Variable inspection rows */
+.env-row {
+    font-size: .82em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    background: #f0f4ff;
+    border-left: 3px solid #4a90e2;
+    padding: .25em .7em;
+    margin: .25em 0 .6em 1.5em;
+    border-radius: 0 3px 3px 0;
+    color: #333;
+}
+.var-name { color: #6f42c1; font-weight: 600; }
+.var-val  { color: #005cc5; }
+
+@media print {
+    body { padding: 12px; font-size: 12px; }
+    h1, h2 { page-break-after: avoid; }
+    .img-wrap { page-break-inside: avoid; }
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: .75em;
+        color: #666;
+    }
+}
+
+</style>
+</head>
+<body>
+<p>Last lecture: overview of datasets used for training language models</p>
+<ul>
+<li>Live service (GitHub) → dump/crawl (GH Archive) → processed data (The Stack)</li>
+</ul>
+<ul>
+<li>Processing: HTML to text, language/quality/toxicity filtering, deduplication</li>
+</ul>
+<p>This lecture: deep dive into the mechanics</p>
+<ul>
+<li>Algorithms for filtering (e.g., classifiers)</li>
+</ul>
+<ul>
+<li>Applications of filtering (e.g., language, quality, toxicity)</li>
+</ul>
+<ul>
+<li>Deduplication (e.g., Bloom filters, MinHash, LSH)</li>
+</ul>
+<p>Algorithmic building block:</p>
+<ul>
+<li>Given some <strong>target data</strong> T and lots of <strong>raw data</strong> R, find subset T&#x27; of R similar to T.</li>
+</ul>
+<div class="img-wrap"><img src="images/raw-target-schema.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>Desiderata for filtering algorithm:</p>
+<ul>
+<li>Generalize from the target data (want T and T&#x27; to be different)</li>
+</ul>
+<ul>
+<li>Extremely fast (have to run it on R, which is huge)</li>
+</ul>
+<p><strong>n-gram model with Kneser-Ney smoothing</strong></p>
+<ul>
+<li>KenLM: fast implementation originally for machine translation</li>
+</ul>
+<ul>
+<li>Common language model used for data filtering</li>
+</ul>
+<ul>
+<li>Extremely simple / fast - just count and normalize</li>
+</ul>
+<h3>Concepts</h3>
+<p>Maximum likelihood estimation of n-gram language model:</p>
+<ul>
+<li>n = 3: p(in | the cat) = count(the cat in) / count(the cat)</li>
+</ul>
+<p>Problem: sparse counts (count of many n-grams is 0 for large n)</p>
+<p>Solution: Use Kneser-Ney smoothing to handle unseen n-grams</p>
+<ul>
+<li>p(in | the cat) depends on p(in | cat) too</li>
+</ul>
+<h3>CCNet</h3>
+<div class="env-row"><span class="var-name">score</span> = <span class="var-val">-78.60276794433594</span>, <span class="var-name">perplexity</span> = <span class="var-val">62.61393057799338</span></div>
+<ul>
+<li>Items are paragraphs of text</li>
+</ul>
+<ul>
+<li>Sort paragraphs by increasing perplexity</li>
+</ul>
+<ul>
+<li>Keep the top 1/3</li>
+</ul>
+<ul>
+<li>Was used in LLaMA</li>
+</ul>
+<p>Summary: Kneser-Ney n-gram language models (with KenLM implementation) is fast but crude</p>
+<p>fastText classifier</p>
+<ul>
+<li>Task: text classification (e.g., sentiment classification)</li>
+</ul>
+<ul>
+<li>Goal was to train a fast classifier for text classification</li>
+</ul>
+<ul>
+<li>They found it was as good as much slower neural network classifiers</li>
+</ul>
+<h3>Baseline: bag of words (not what they did)</h3>
+<p>Problem: V*K parameters (could be huge)</p>
+<h3>fastText classifier: bag of word embeddings</h3>
+<p>Only H*(V + K) parameters</p>
+<p>Implementation:</p>
+<ul>
+<li>Parallelized, asynchronous SGD</li>
+</ul>
+<ul>
+<li>Learning rate: linear interpolation from [some number] to 0</li>
+</ul>
+<h3>Bag of n-grams</h3>
+<p>Problem: number of bigrams can get large (and also be unbounded)</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[&#x27;the cat&#x27;, &#x27;cat in&#x27;, &#x27;in the&#x27;, &#x27;the hat&#x27;]</span></div>
+<p>Solution: hashing trick</p>
+<ul>
+<li>For quality filtering, we have K = 2 classes (good versus bad)</li>
+</ul>
+<div class="env-row"><span class="var-name">hashed_x</span> = <span class="var-val">[2, 1, 6, 4]</span></div>
+<ul>
+<li>In that case, fastText is just a linear classifier (H = K = 2)</li>
+</ul>
+<p>In general, can use any classifier (e.g., BERT, Llama), it&#x27;s just slower</p>
+<p>Data Selection for Language Models via Importance Resampling (DSIR)</p>
+<div class="img-wrap"><img src="var/files/image-86d4bcf6b266e36f34e3a8f883b54d48-https_www_jinghong-chen_net_content_images_size_w1200_2023_12_Screenshot-2023-12-24-at-17_41_38_png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>Setup:</p>
+<ul>
+<li>Target distribution p (want samples from here)</li>
+</ul>
+<ul>
+<li>Proposal distribution q (have samples from here)</li>
+</ul>
+<p>Samples (q): [0 2 0 2 1 1 0 1 0 1 0 0 0 0 1 1 0 3 1 1 1 1 1 1 3 1 0 2 0 1 3 0 2 1 1 2 0</p>
+<p>0 0 3 2 1 1 0 1 1 0 3 2 0 2 0 1 0 1 2 2 2 0 0 0 0 2 1 0 2 0 1 3 0 0 0 0 0</p>
+<p>0 0 1 1 2 2 2 1 0 1 1 0 1 0 1 0 1 1 3 3 0 1 0 0 2 0]</p>
+<div class="env-row"><span class="var-name">samples</span> = <span class="var-val">[0 2 0 2 1 1 0 1 0 1 0 0 0 0 1 1 0 3 1 1 1 1 1 1 3 1 0 2 0 1 3 0 2 1 1 2 0
+ 0 0 3 2 1 1 0 1 1 0 3 2 0 2 0 1 0 1 2 2 2 0 0 0 0 2 1 0 2 0 1 3 0 0 0 0 0
+ 0 0 1 1 2 2 2 1 0 1 1 0 1 0 1 0 1 1 3 3 0 1 0 ...</span></div>
+<p>Resampled (p): [2 2 1 3 3 2 0 3 3 2 1 0 3 2 0 3 3 1 3 1 3 2 3 2 3 2 3 1 0 3 2 2 2 0 2 1 2</p>
+<p>0 3 1 1 1 3 1 3 3 3 1 0 2 3 1 2 1 2 2 2 2 1 1 0 2 1 1 0 2 3 2 1 3 2 3 1 2</p>
+<p>3 2 3 2 1 1 3 3 3 1 1 3 2 1 3 1 3 1 0 3 1 1 2 3 2 1]</p>
+<div class="env-row"><span class="var-name">w</span> = <span class="var-val">[0.0027649769585253456, 0.016589861751152072, 0.0027649769585253456, 0.016589861751152072, 0.0073732718894009225, 0.0073732718894009225, 0.0027649769585253456, 0.0073732718894009225, 0.002764976958...</span>, <span class="var-name">z</span> = <span class="var-val">90.41666666666667</span>, <span class="var-name">samples</span> = <span class="var-val">[2 2 1 3 3 2 0 3 3 2 1 0 3 2 0 3 3 1 3 1 3 2 3 2 3 2 3 1 0 3 2 2 2 0 2 1 2
+ 0 3 1 1 1 3 1 3 3 3 1 0 2 3 1 2 1 2 2 2 2 1 1 0 2 1 1 0 2 3 2 1 3 2 3 1 2
+ 3 2 3 2 1 1 3 3 3 1 1 3 2 1 3 1 3 1 0 3 1 1 2 ...</span></div>
+<p>Setup:</p>
+<ul>
+<li>Target dataset D_p (small)</li>
+</ul>
+<ul>
+<li>Proposal (raw) dataset D_q (large)</li>
+</ul>
+<p>Take 1:</p>
+<ul>
+<li>Fit target distribution p to D_p</li>
+</ul>
+<ul>
+<li>Fit proposal distribution q to D_q</li>
+</ul>
+<ul>
+<li>Do importance resampling with p, q, and raw samples D_q</li>
+</ul>
+<p>Problem: target data D_p is too small to estimate a good model</p>
+<p>Take 2: use hashed n-grams</p>
+<p>Result: DSIR slightly better than heuristic classification (fastText) on the <a href="https://gluebenchmark.com/" target="_blank">GLUE</a> benchmark</p>
+<div class="env-row"><span class="var-name">training_hashed_ngrams</span> = <span class="var-val">[3, 1, 1, 3, 3]</span>, <span class="var-name">probs</span> = <span class="var-val">[0.0, 0.4, 0.0, 0.6]</span>, <span class="var-name">hashed_ngrams</span> = <span class="var-val">[3, 0]</span>, <span class="var-name">prob</span> = <span class="var-val">0.0</span></div>
+<div class="img-wrap"><img src="images/dsir-results.png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<p>Comparison with fastText:</p>
+<ul>
+<li>Modeling distributions is a more principled approach capturing diversity</li>
+</ul>
+<ul>
+<li>Similar computation complexity</li>
+</ul>
+<ul>
+<li>Both can be improved by better modeling</li>
+</ul>
+<p>Implementations: KenLM, fastText, DSIR</p>
+<h3>General framework</h3>
+<p>Given target T and raw R, find subset of R similar to T</p>
+<p>1. Estimate some model based on R and T and derive a scoring function</p>
+<p>2. Keep examples in R based on their score</p>
+<h3>Instantiations of the framework</h3>
+<p>Generative model of T (KenLM):</p>
+<p>1. score(x) = p_T(x)</p>
+<p>2. Keep examples x with score(x) &gt;= threshold (stochastically)</p>
+<p>Discriminative classifier (fastText):</p>
+<p>1. score(x) = p(T | x)</p>
+<p>2. Keep examples x with score(x) &gt;= threshold (stochastically)</p>
+<p>Importance resampling (DSIR):</p>
+<p>1. score(x) = p_T(x) / p_R(x)</p>
+<p>2. Resample examples x with probability proportional to score(x)</p>
+<p>Survey paper on data selection</p>
+<p>The same data filtering machinery can be used for different filtering tasks.</p>
+<p>Language identification: find text of a specific language (e.g., English)</p>
+<p>Why not just go multilingual?</p>
+<ul>
+<li>Data: difficult to do curation / processing of high-quality data in any given language</li>
+</ul>
+<ul>
+<li>Compute: in computed-limited regime, less compute/tokens dedicated to any given language</li>
+</ul>
+<p>Models differ on multilinguality:</p>
+<ul>
+<li>English was only 30% of BLOOM (was undertrained), English performance suffered</li>
+</ul>
+<ul>
+<li>Most frontier models (GPT-4, Claude, Gemini, Llama, Qwen) are heavily multilingual (sufficiently trained)</li>
+</ul>
+<p>fastText language identification</p>
+<ul>
+<li>Off-the-shelf classifier</li>
+</ul>
+<ul>
+<li>Supports 176 languages</li>
+</ul>
+<ul>
+<li>Trained on multilingual sites: Wikipedia, Tatoeba (translation site) and SETimes (Southeast European news)</li>
+</ul>
+<p>Example: Dolma keeps pages with p(English) &gt;= 0.5</p>
+<p>Caveats:</p>
+<div class="env-row"><span class="var-name">predictions</span> = <span class="var-val">([[&#x27;__label__es&#x27;]], [array([0.935495], dtype=float32)])</span></div>
+<ul>
+<li>Difficult for short sequences</li>
+</ul>
+<ul>
+<li>Difficult for low-resource languages</li>
+</ul>
+<ul>
+<li>Could accidentally filter out dialects of English</li>
+</ul>
+<ul>
+<li>Hard for similar languages (Malay and Indonesian)</li>
+</ul>
+<ul>
+<li>Ill-defined for code-switching (e.g., Spanish + English)</li>
+</ul>
+<p>OpenMathText</p>
+<ul>
+<li>Goal: curate large corpus of mathematical text from CommonCrawl</li>
+</ul>
+<ul>
+<li>Use rules to filter (e.g., contains latex commands)</li>
+</ul>
+<ul>
+<li>KenLM trained on ProofPile, keep if perplexity &lt; 15000</li>
+</ul>
+<ul>
+<li>Trained fastText classifier to predict mathematical writing, threshold is 0.17 if math, 0.8 if no math</li>
+</ul>
+<p>Result: produced 14.7B tokens, used to train 1.4B models that do better than models trained on 20x data</p>
+<ul>
+<li>Some deliberately do not use model-based filtering (C4, Gopher, RefinedWeb, FineWeb, Dolma)</li>
+</ul>
+<ul>
+<li>Some use model-based filtering (GPT-3, LLaMA, DCLM) [becoming the norm]</li>
+</ul>
+<p><strong>GPT-3</strong></p>
+<ul>
+<li>Positives: samples from {Wikipedia, WebText2, Books1, Books2}</li>
+</ul>
+<ul>
+<li>Negatives: samples from CommonCrawl</li>
+</ul>
+<div class="img-wrap"><img src="var/files/image-f6740f86942b62021ef254624d82476e-https_upload_wikimedia_org_wikipedia_commons_thumb_1_11_Probability_density_function_of_Pareto_distribution_svg_325px-Probability_density_function_of_Pareto_distribution_svg_png" style="max-width: 0.5px; height: auto;" loading="lazy" /></div>
+<p>Train linear classifier based on word features</p>
+<p>Keep documents stochastically based on score</p>
+<p><strong> LLaMA/RedPajama</strong></p>
+<ul>
+<li>Positives: samples from pages <strong>referenced</strong> by Wikipedia</li>
+</ul>
+<ul>
+<li>Negatives: samples from CommonCrawl</li>
+</ul>
+<ul>
+<li>Keep documents that are classified positive</li>
+</ul>
+<p><strong>phi-1</strong></p>
+<p>Philosophy: really high quality data (textbooks) to train a small model (1.5B)</p>
+<p>Includes synthetic data from GPT 3.5 (later: GPT-4) and filtered data</p>
+<p>Train random forest classifier on T using output embedding from pretrained codegen model</p>
+<p>Select data from R that is classified positive by the classifier</p>
+<p>Result on <a href="https://huggingface.co/datasets/openai_humaneval" target="_blank">HumanEval</a>:</p>
+<ul>
+<li>Train 1.3B LM on Python subset of The Stack (performance: 12.19% after 96K steps)</li>
+</ul>
+<ul>
+<li>Train 1.3B LM on new filtered subset (performance: 17.68% after 36K steps) - better!</li>
+</ul>
+<p>Toxicity filtering in Dolma</p>
+<p>Dataset: Jigsaw Toxic Comments dataset (2018)</p>
+<ul>
+<li>Project goal: help people have better discussions online</li>
+</ul>
+<ul>
+<li>Data: comments on Wikipedia talk page annotated with {toxic, severe_toxic, obscene, threat, insult, identity_hate}</li>
+</ul>
+<p>Trained 2 fastText classifiers</p>
+<ul>
+<li>hate: positive = {unlabeled, obscene}, negative = all else</li>
+</ul>
+<ul>
+<li>NSFW: positive = {obscene}, negative = all else</li>
+</ul>
+<p>Two types of duplicates:</p>
+<div class="env-row"><span class="var-name">predictions</span> = <span class="var-val">([[&#x27;__label__non-nsfw&#x27;]], [array([1.00001], dtype=float32)])</span></div>
+<ul>
+<li>Exact duplicates (mirror sites, GitHub forks)</li>
+</ul>
+<ul>
+<li>Near duplicates: same text differing by a few tokens</li>
+</ul>
+<p>Examples of near duplicates:</p>
+<ul>
+<li>Terms of service and licenses</li>
+</ul>
+<ul>
+<li>Formulaic writing (copy/pasted or generated from a template)</li>
+</ul>
+<div class="img-wrap"><img src="var/files/image-bd6f945561f42be108f3dd1de0ace52e-https_d3i71xaburhd42_cloudfront_net_4566c0d22ebf3c31180066ab23b6c445aeec78d5_5-Table1-1_png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>Minor formatting differences in copy/pasting</li>
+</ul>
+<p>Product description repeated 61,036 times in C4</p>
+<p>&#x27;“by combining fantastic ideas, interesting arrangements, and follow the current trends in the field of that make you more inspired and give artistic touches. We’d be honored if you can apply some or all of these design in your wedding.  believe me, brilliant ideas would be perfect if it can be applied in real and make the people around you amazed!</p>
+<p>Deduplication training data makes language models better</p>
+<ul>
+<li>Train more efficiently (because have fewer tokens)</li>
+</ul>
+<ul>
+<li>Avoid memorization (can mitigate copyright, privacy concerns)</li>
+</ul>
+<p>Design space:</p>
+<p>1. What is an item (sentence, paragraph, document)?</p>
+<p>2. How to match (exact match, existence of common subitem, fraction of common subitems)?</p>
+<p>3. What action to take (remove all, remove all but one)?</p>
+<p>Key challenge:</p>
+<ul>
+<li>Deduplication is fundamentally about comparing items to other items</li>
+</ul>
+<ul>
+<li>Need linear time algorithms to scale</li>
+</ul>
+<ul>
+<li>Hash function h maps item to a hash value (integer or string)</li>
+</ul>
+<ul>
+<li>Hash value much smaller than item</li>
+</ul>
+<ul>
+<li>Hash collision: h(x) = h(y) for x ≠ y</li>
+</ul>
+<p>Tradeoff between efficiency and collision resistance</p>
+<ul>
+<li>Cryptographic hash functions (SHA-256): collision resistant, slow (used in bitcoin)</li>
+</ul>
+<ul>
+<li>DJB2, MurmurHash, CityHash: not collision resistant, fast (used for hash tables)</li>
+</ul>
+<p>We will use MurmurHash:</p>
+<p><strong>Simple example</strong></p>
+<div class="env-row"><span class="var-name">h</span> = <span class="var-val">613153351</span></div>
+<p>1. Item: string</p>
+<p>2. How to match: exact match</p>
+<p>3. Action: remove all but one</p>
+<ul>
+<li>Pro: simple, clear semantics, high precision</li>
+</ul>
+<div class="env-row"><span class="var-name">items</span> = <span class="var-val">[&#x27;Hello!&#x27;, &#x27;hello&#x27;, &#x27;hello there&#x27;, &#x27;hello&#x27;, &#x27;hi&#x27;, &#x27;bye&#x27;]</span>, <span class="var-name">deduped_items</span> = <span class="var-val">[&#x27;hi&#x27;, &#x27;bye&#x27;, &#x27;hello&#x27;, &#x27;hello there&#x27;, &#x27;Hello!&#x27;]</span></div>
+<ul>
+<li>Con: does not deduplicate near duplicates</li>
+</ul>
+<ul>
+<li>This code is written in a MapReduce way, can easily parallelize and scale</li>
+</ul>
+<p><strong>C4</strong></p>
+<p>1. Item: 3-sentence spans</p>
+<p>2. How to match: use exact match</p>
+<p>3. Action: remove all but one</p>
+<p>Warning: when a 3-sentence span is removed from the middle of a document, the resulting document might not be coherent</p>
+<p>Goal: efficient, approximate data structure for testing set membership</p>
+<p>Features of Bloom filters</p>
+<ul>
+<li>Memory efficient</li>
+</ul>
+<ul>
+<li>Can update, but can&#x27;t delete</li>
+</ul>
+<ul>
+<li>If return &#x27;no&#x27;, definitely &#x27;no&#x27;</li>
+</ul>
+<ul>
+<li>If return &#x27;yes&#x27;, most likely &#x27;yes&#x27;, but small probability of &#x27;no&#x27;</li>
+</ul>
+<ul>
+<li>Can drive the false positive rate down exponentially with more time/compute</li>
+</ul>
+<p>First, make the range of hash function small (small number of bins).</p>
+<p>Problem: false positives for small bins</p>
+<div class="env-row"><span class="var-name">table</span> = <span class="var-val">bitarray(&#x27;01101001&#x27;)</span>, <span class="var-name">item</span> = <span class="var-val">hat</span>, <span class="var-name">h</span> = <span class="var-val">4</span>, <span class="var-name">result</span> = <span class="var-val">{&#x27;what&#x27;: 1, &#x27;who&#x27;: 1, &#x27;why&#x27;: 0, &#x27;when&#x27;: 0, &#x27;where&#x27;: 1, &#x27;which&#x27;: 1, &#x27;how&#x27;: 0}</span>, <span class="var-name">num_mistakes</span> = <span class="var-val">4</span>, <span class="var-name">false_positive_rate</span> = <span class="var-val">0.4444444444444444</span></div>
+<p>Naive solution: increase the number of bins</p>
+<p>Error probability is O(1/num_bins), decreases polynomially with memory</p>
+<p>Better solution: use more hash functions</p>
+<p>Reduced the false positive rate!</p>
+<div class="env-row"><span class="var-name">table</span> = <span class="var-val">bitarray(&#x27;01101111&#x27;)</span>, <span class="var-name">item</span> = <span class="var-val">hat</span>, <span class="var-name">h</span> = <span class="var-val">6</span>, <span class="var-name">seed</span> = <span class="var-val">1</span>, <span class="var-name">result</span> = <span class="var-val">{&#x27;what&#x27;: 1, &#x27;who&#x27;: 0, &#x27;why&#x27;: 0, &#x27;when&#x27;: 0, &#x27;where&#x27;: 1, &#x27;which&#x27;: 1, &#x27;how&#x27;: 0}</span>, <span class="var-name">num_mistakes</span> = <span class="var-val">3</span>, <span class="var-name">false_positive_rate</span> = <span class="var-val">0.375</span></div>
+<p>Assume independence of hash functions and items</p>
+<p>Consider a test input (not in the set) that would hash into a given test bin (say, i).</p>
+<p>Now consider putting items into the Bloom filter and seeing if it hits i.</p>
+<p>Optimal value of k (given fixed m / n ratio) [results in f ~ 0.5]</p>
+<div class="env-row"><span class="var-name">f</span> = <span class="var-val">0.010215585027679068</span></div>
+<p>Resulting false positive rate (improved)</p>
+<div class="env-row"><span class="var-name">k</span> = <span class="var-val">6.931471805599452</span></div>
+<p>Tradeoff between compute (k), memory (m), and false positive rate (f)</p>
+<div class="env-row"><span class="var-name">f</span> = <span class="var-val">0.008192549468178965</span></div>
+<p>Example: Dolma</p>
+<ul>
+<li>Set false positive rate to 1e-15</li>
+</ul>
+<ul>
+<li>Perform on items = paragraphs</li>
+</ul>
+<p>Let&#x27;s now look at approximate set membership.</p>
+<p>First we need a similarity measure.</p>
+<h3>Jaccard similarity</h3>
+<p>Definition: Jaccard(A, B) = |A intersect B| / |A union B|</p>
+<p>Definition: two documents are <strong>near duplicates</strong> if their Jaccard similarity &gt;= threshold</p>
+<div class="env-row"><span class="var-name">intersection</span> = <span class="var-val">3</span>, <span class="var-name">union</span> = <span class="var-val">5</span>, <span class="var-name">jaccard</span> = <span class="var-val">0.6</span></div>
+<p>Algorithmic challenge: find near duplicates in linear time</p>
+<h3>MinHash</h3>
+<p>MinHash: a random hash function h so that Pr[h(A) = h(B)] = Jaccard(A, B)</p>
+<p>Normally, you want different items to hash to different hashes</p>
+<p>...but here, you want collision probability to depend on similarity</p>
+<p>Characteristic matrix representation:</p>
+<p>item | A | B</p>
+<p>1    | 1 | 1</p>
+<p>2    | 1 | 1</p>
+<p>3    | 1 | 1</p>
+<p>4    | 1 | 0</p>
+<p>5    | 0 | 1</p>
+<p>Random hash function induces a permutation over items</p>
+<p>Look at which item is first in A and which item is first in B.</p>
+<p>Each item has the same probability as being first (min)</p>
+<ul>
+<li>If 1, 2, 3 is first, then first in A = first in B.</li>
+</ul>
+<ul>
+<li>If 4, 5 is first, then first in A ≠ first in B.</li>
+</ul>
+<p>Now we can hash our items, but a collision doesn&#x27;t tell us Jaccard(A, B) &gt; threshold.</p>
+<div class="env-row"><span class="var-name">estimated_jaccard</span> = <span class="var-val">0.6</span></div>
+<p>Locality sensitive hashing (LSH)</p>
+<p>Suppose we hash examples just one MinHash function</p>
+<p>P[A and B collide] = Jaccard(A, B)</p>
+<p>On average, more similar items will collide, but very stochastic...</p>
+<p>Goal: have A and B collide if Jaccard(A, B) &gt; threshold</p>
+<p>We have to somehow sharpen the probabilities...</p>
+<p>Solution: use n hash functions</p>
+<p>Break up into b bands of r hash functions each (n = b * r)</p>
+<p>Hash functions:</p>
+<p>h1 h2 h3 h4  |  h5 h6 h7 h8  |  h9 h10 h11 h12</p>
+<p>Key: A and B collide if for <em>some</em> band, <em>all</em> its hash functions return same value</p>
+<p>As we will see, the and-or structure of the bands sharpens the threshold</p>
+<p>Given Jaccard(A, B), what is the probability that A and B collide?</p>
+<p><strong>Example</strong></p>
+<div class="env-row"><span class="var-name">b</span> = <span class="var-val">3</span>, <span class="var-name">r</span> = <span class="var-val">4</span></div>
+<div class="img-wrap"><img src="var/files/image-5c7429f9fdd2bf58b7c5651aebc8f045-https_cdn_sanity_io_images_vr8gru94_production_b470799575b8e77911bacb8500977afef06d6c85-1280x720_png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<div class="env-row"><span class="var-name">sim</span> = <span class="var-val">0.8</span>, <span class="var-name">b</span> = <span class="var-val">5</span>, <span class="var-name">r</span> = <span class="var-val">10</span>, <span class="var-name">prob_match</span> = <span class="var-val">0.10737418240000006</span>, <span class="var-name">prob_collision</span> = <span class="var-val">0.43330782041120397</span></div>
+<p>Increasing r sharpens the threshold and moves the curve to the right (harder to match)</p>
+<div class="env-row"><span class="var-name">sim</span> = <span class="var-val">0.98</span>, <span class="var-name">b</span> = <span class="var-val">10</span>, <span class="var-name">r</span> = <span class="var-val">10</span>, <span class="var-name">prob_match</span> = <span class="var-val">0.8170728068875467</span>, <span class="var-name">prob_collision</span> = <span class="var-val">0.9999999580450986</span>, <span class="var-name">probs</span> = <span class="var-val">{&#x27;0.7&#x27;: 0.24914417423121082, &#x27;0.75&#x27;: 0.4398848046250401, &#x27;0.8&#x27;: 0.6788599735928997, &#x27;0.85&#x27;: 0.8883561842922729, &#x27;0.9&#x27;: 0.9862610183556292, &#x27;0.95&#x27;: 0.999891783915662, &#x27;0.98&#x27;: 0.9999999580450986}</span></div>
+<p>Increasing b moves the curve to the left (easier to match)</p>
+<div class="env-row"><span class="var-name">sim</span> = <span class="var-val">0.98</span>, <span class="var-name">b</span> = <span class="var-val">10</span>, <span class="var-name">r</span> = <span class="var-val">20</span>, <span class="var-name">prob_match</span> = <span class="var-val">0.6676079717550942</span>, <span class="var-name">prob_collision</span> = <span class="var-val">0.9999835371130633</span>, <span class="var-name">probs</span> = <span class="var-val">{&#x27;0.7&#x27;: 0.007950636881415285, &#x27;0.75&#x27;: 0.03126337888689601, &#x27;0.8&#x27;: 0.10949086440906874, &#x27;0.85&#x27;: 0.3265265704029475, &#x27;0.9&#x27;: 0.7264487568116678, &#x27;0.95&#x27;: 0.9881951109097257, &#x27;0.98&#x27;: 0.9999835371130633}</span></div>
+<div class="img-wrap"><img src="var/files/image-7666e77b1a420b4da170c895b069684e-https_cdn_sanity_io_images_vr8gru94_production_aace49fa240778e8ecf6e85ad08a2de7f5385566-1280x720_png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<div class="env-row"><span class="var-name">sim</span> = <span class="var-val">0.98</span>, <span class="var-name">b</span> = <span class="var-val">20</span>, <span class="var-name">r</span> = <span class="var-val">20</span>, <span class="var-name">prob_match</span> = <span class="var-val">0.6676079717550942</span>, <span class="var-name">prob_collision</span> = <span class="var-val">0.9999999997289734</span>, <span class="var-name">probs</span> = <span class="var-val">{&#x27;0.7&#x27;: 0.015838061136010495, &#x27;0.75&#x27;: 0.061549358914366414, &#x27;0.8&#x27;: 0.2069934794290924, &#x27;0.85&#x27;: 0.546433539626784, &#x27;0.9&#x27;: 0.9251697173501179, &#x27;0.95&#x27;: 0.9998606445935663, &#x27;0.98&#x27;: 0.9999999997289734}</span></div>
+<p>Example setting: n = 9000, b = 20, r = 450</p>
+<p>What is the threshold (where the phase transition happens)?</p>
+<p>Probability that a fixed band matches:</p>
+<div class="env-row"><span class="var-name">threshold</span> = <span class="var-val">0.9933649271209614</span></div>
+<p>Probability that A and B collide (≈ 1-1/e):</p>
+<div class="env-row"><span class="var-name">prob_match</span> = <span class="var-val">0.05</span></div>
+<h3>Summary</h3>
+<div class="env-row"><span class="var-name">prob_collision</span> = <span class="var-val">0.6415140775914581</span></div>
+<ul>
+<li>Algorithmic tools: n-gram models (KenLM), classifiers (fastText), importance resampling (DSIR)</li>
+</ul>
+<ul>
+<li>Applications: language identification, quality filtering, toxicity filtering</li>
+</ul>
+<ul>
+<li>Deduplication: hashing scales to large datasets for fuzzy matching</li>
+</ul>
+<ul>
+<li>Now you have the tools (mechanics), just have to spend time with data (intuitions)</li>
+</ul>
+</body>
+</html>

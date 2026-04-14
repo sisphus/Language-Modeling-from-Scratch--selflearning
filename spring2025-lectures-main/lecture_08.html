@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecture 08</title>
+<script>
+MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #222;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #fff;
+}
+h1 { font-size: 2em;   border-bottom: 2px solid #e1e4e8; padding-bottom: .3em; margin-top: 1.6em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #e1e4e8; padding-bottom: .25em; margin-top: 1.6em; }
+h3 { font-size: 1.2em; margin-top: 1.4em; }
+h4, h5, h6 { margin-top: 1.2em; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: .4em; font-weight: 600; color: #111; }
+p  { margin: .45em 0; }
+ul, ol { margin: .4em 0; padding-left: 2.2em; }
+li { margin: .15em 0; }
+a  { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.img-wrap {
+    margin: 1.2em 0;
+    text-align: center;
+}
+.img-wrap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+/* Variable inspection rows */
+.env-row {
+    font-size: .82em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    background: #f0f4ff;
+    border-left: 3px solid #4a90e2;
+    padding: .25em .7em;
+    margin: .25em 0 .6em 1.5em;
+    border-radius: 0 3px 3px 0;
+    color: #333;
+}
+.var-name { color: #6f42c1; font-weight: 600; }
+.var-val  { color: #005cc5; }
+
+@media print {
+    body { padding: 12px; font-size: 12px; }
+    h1, h2 { page-break-after: avoid; }
+    .img-wrap { page-break-inside: avoid; }
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: .75em;
+        color: #666;
+    }
+}
+
+</style>
+</head>
+<body>
+<p>Last week: parallelism within a single GPU</p>
+<p>This week: parallelism across multiple GPUs</p>
+<div class="img-wrap"><img src="images/gpu-node-overview.png" style="max-width: 500px; height: auto;" loading="lazy" /></div>
+<p>In both cases, <strong>compute</strong> (arithmetic logic units) is far from inputs/outputs (<strong>data</strong>).</p>
+<p>Unifying theme: orchestrate computation to avoid data transfer bottlenecks</p>
+<p>Last week: reduce memory accesses via fusion/tiling</p>
+<p>This week: reduce communication across GPUs/nodes via replication/sharding</p>
+<p>Generalized hierarchy (from small/fast to big/slow):</p>
+<ul>
+<li>Single node, single GPU: L1 cache / shared memory</li>
+</ul>
+<ul>
+<li>Single node, single GPU: HBM</li>
+</ul>
+<ul>
+<li>Single node, multi-GPU: NVLink</li>
+</ul>
+<ul>
+<li>Multi-node, multi-GPU: NVSwitch</li>
+</ul>
+<p>This lecture: concretize the concepts from last lecture in code</p>
+<h3>Part 1: building blocks of distributed communication/computation</h3>
+<p><strong>Collective operations</strong> are the conceptual primitives used for distributed programming</p>
+<ul>
+<li>Collective means that you specify communication pattern across many (e.g., 256) nodes.</li>
+</ul>
+<ul>
+<li>These are classic in the parallel programming literature from the 1980s.</li>
+</ul>
+<ul>
+<li>Better/faster abstraction than managing point-to-point communication yourself.</li>
+</ul>
+<p>Terminology:</p>
+<ul>
+<li><strong>World size</strong>: number of devices (e.g., 4)</li>
+</ul>
+<ul>
+<li><strong>Rank</strong>: a device (e.g., 0, 1, 2, 3)</li>
+</ul>
+<h3>Broadcast</h3>
+<div class="img-wrap"><img src="var/files/image-525847c9d4b48933cb231204a2d13e0e-https_pytorch_org_tutorials__images_broadcast_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<h3>Scatter</h3>
+<div class="img-wrap"><img src="var/files/image-3aa3584628cb0526c8b0e9d02b15d876-https_pytorch_org_tutorials__images_scatter_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<h3>Gather</h3>
+<div class="img-wrap"><img src="var/files/image-7e8670a3b7cdc7848394514ef1da090a-https_pytorch_org_tutorials__images_gather_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<h3>Reduce</h3>
+<div class="img-wrap"><img src="var/files/image-1c451df4406aea85e640d1ae7df6df31-https_pytorch_org_tutorials__images_reduce_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<h3>All-gather</h3>
+<div class="img-wrap"><img src="var/files/image-4a48977cd9545f897942a4a4ef1175ac-https_pytorch_org_tutorials__images_all_gather_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<h3>Reduce-scatter</h3>
+<div class="img-wrap"><img src="var/files/image-66ea136cfe7f3e7394fd0b056fd9d949-https_docs_nvidia_com_deeplearning_nccl_user-guide_docs__images_reducescatter_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<h3>All-reduce = reduce-scatter + all-gather</h3>
+<div class="img-wrap"><img src="var/files/image-0ef9693f0008d5a75aa5ac2b542b83ac-https_pytorch_org_tutorials__images_all_reduce_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>Way to remember the terminology:</p>
+<ul>
+<li>Reduce: performs some associative/commutative operation (sum, min, max)</li>
+</ul>
+<ul>
+<li>Broadcast/scatter is inverse of gather</li>
+</ul>
+<ul>
+<li>All: means destination is all devices</li>
+</ul>
+<h3>Hardware</h3>
+<p>Classic (in the home):</p>
+<div class="img-wrap"><img src="var/files/image-b0641f11a73711b3078acbd257b0c805-https_media_springernature_com_lw685_springer-static_image_art_3A10_1186_2Fs42774-021-00098-3_MediaObjects_42774_2021_98_Fig1_HTML_png_as_webp" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>GPUs on same node communicate via a PCI(e) bus (v7.0, 16 lanes =&gt; 242 GB/s)</li>
+</ul>
+<ul>
+<li>GPUs on different nodes communicate via Ethernet (~200 MB/s)</li>
+</ul>
+<p>Modern (in the data center):</p>
+<div class="img-wrap"><img src="var/files/image-97297f9b05f43069b2bab97dd5a821a8-https_www_nextplatform_com_wp-content_uploads_2018_04_nvidia-nvswitch-topology-two_jpg" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>Within a node: NVLink connects GPUs directly, bypass CPU</li>
+</ul>
+<ul>
+<li>Across nodes: NVSwitch connects GPUs directly, bypass Ethernet</li>
+</ul>
+<p>Each H100 has 18 NVLink 4.0 links, for a total of 900GB/s</p>
+<p>In comparison, memory bandwidth for HBM is 3.9 TB/s</p>
+<p>Let&#x27;s check what our hardware setup is.</p>
+<p>Note GPUs are connected via NV18, also connected to NICs (for PCIe)</p>
+<h3>NVIDIA Collective Communication Library (NCCL)</h3>
+<p>NCCL translates collective operations into low-level packets that are sent between GPUs.</p>
+<ul>
+<li>Detects topology of hardware (e.g., number of nodes, switches, NVLink/PCIe)</li>
+</ul>
+<ul>
+<li>Optimizes the path between GPUs</li>
+</ul>
+<ul>
+<li>Launches CUDA kernels to send/receive data</li>
+</ul>
+<h3>PyTorch distributed library (<code>torch.distributed</code>)</h3>
+<ul>
+<li>Provides clean interface for collective operations (e.g., <code>all_gather_into_tensor</code>)</li>
+</ul>
+<ul>
+<li>Supports multiple backends for different hardware: gloo (CPU), nccl (GPU)</li>
+</ul>
+<ul>
+<li>Also supports higher-level algorithms (e.g., <code>FullyShardedDataParallel</code>) [not used in this course]</li>
+</ul>
+<p>Let&#x27;s walk through some examples.</p>
+<p>Indeed, all-reduce = reduce-scatter + all-gather!</p>
+<p>Let&#x27;s see how fast communication happens (restrict to one node).</p>
+<h3>Part 2: distributed training</h3>
+<p>Walk through bare-bones implementations of each strategy on deep MLPs.</p>
+<p>Recall that MLPs are the compute bottleneck in Transformers, so this is representative.</p>
+<div class="img-wrap"><img src="images/data-parallelism.png" style="max-width: 300px; height: auto;" loading="lazy" /></div>
+<p>Sharding strategy: each rank gets a slice of the data</p>
+<p>Notes:</p>
+<div class="env-row"><span class="var-name">batch_size</span> = <span class="var-val">128</span>, <span class="var-name">num_dim</span> = <span class="var-val">1024</span>, <span class="var-name">local_batch_size</span> = <span class="var-val">32</span>, <span class="var-name">start_index</span> = <span class="var-val">0</span>, <span class="var-name">end_index</span> = <span class="var-val">32</span></div>
+<ul>
+<li>Losses are different across ranks (computed on local data)</li>
+</ul>
+<ul>
+<li>Gradients are all-reduced to be the same across ranks</li>
+</ul>
+<ul>
+<li>Therefore, parameters remain the same across ranks</li>
+</ul>
+<div class="img-wrap"><img src="images/tensor-parallelism.png" style="max-width: 300px; height: auto;" loading="lazy" /></div>
+<p>Sharding strategy: each rank gets part of each layer, transfer all data/activations</p>
+<div class="img-wrap"><img src="images/pipeline-parallelism.png" style="max-width: 300px; height: auto;" loading="lazy" /></div>
+<div class="env-row"><span class="var-name">batch_size</span> = <span class="var-val">128</span>, <span class="var-name">num_dim</span> = <span class="var-val">1024</span>, <span class="var-name">local_num_dim</span> = <span class="var-val">256</span></div>
+<p>Sharding strategy: each rank gets subset of layers, transfer all data/activations</p>
+<p>Not handled: overlapping communication/computation to eliminate pipeline bubbles</p>
+<div class="env-row"><span class="var-name">batch_size</span> = <span class="var-val">128</span>, <span class="var-name">num_dim</span> = <span class="var-val">1024</span>, <span class="var-name">local_num_layers</span> = <span class="var-val">2</span>, <span class="var-name">micro_batch_size</span> = <span class="var-val">32</span></div>
+<p>What&#x27;s missing?</p>
+<ul>
+<li>More general models (with attention, etc.)</li>
+</ul>
+<ul>
+<li>More communication/computation overlap</li>
+</ul>
+<ul>
+<li>This require more complex code with more bookkeeping</li>
+</ul>
+<ul>
+<li>Jax/TPUs: just define the model, the sharding strategy, and the Jax compiler handles the rest</li>
+</ul>
+<ul>
+<li>But we&#x27;re doing PyTorch so you can see how one builds up from the primitives</li>
+</ul>
+<h3>Summary</h3>
+<ul>
+<li>Many ways to parallelize: data (batch), tensor/expert (width), pipeline (depth), sequence (length)</li>
+</ul>
+<ul>
+<li>Can <strong>re-compute</strong> or store in <strong>memory</strong> or store in another GPUs memory and <strong>communicate</strong></li>
+</ul>
+<ul>
+<li>Hardware is getting faster, but will always want bigger models, so will have this hierarchical structure</li>
+</ul>
+</body>
+</html>

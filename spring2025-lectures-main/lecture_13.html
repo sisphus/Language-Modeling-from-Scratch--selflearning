@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecture 13</title>
+<script>
+MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #222;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #fff;
+}
+h1 { font-size: 2em;   border-bottom: 2px solid #e1e4e8; padding-bottom: .3em; margin-top: 1.6em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #e1e4e8; padding-bottom: .25em; margin-top: 1.6em; }
+h3 { font-size: 1.2em; margin-top: 1.4em; }
+h4, h5, h6 { margin-top: 1.2em; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: .4em; font-weight: 600; color: #111; }
+p  { margin: .45em 0; }
+ul, ol { margin: .4em 0; padding-left: 2.2em; }
+li { margin: .15em 0; }
+a  { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.img-wrap {
+    margin: 1.2em 0;
+    text-align: center;
+}
+.img-wrap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+/* Variable inspection rows */
+.env-row {
+    font-size: .82em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    background: #f0f4ff;
+    border-left: 3px solid #4a90e2;
+    padding: .25em .7em;
+    margin: .25em 0 .6em 1.5em;
+    border-radius: 0 3px 3px 0;
+    color: #333;
+}
+.var-name { color: #6f42c1; font-weight: 600; }
+.var-val  { color: #005cc5; }
+
+@media print {
+    body { padding: 12px; font-size: 12px; }
+    h1, h2 { page-break-after: avoid; }
+    .img-wrap { page-break-inside: avoid; }
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: .75em;
+        color: #666;
+    }
+}
+
+</style>
+</head>
+<body>
+<p>Previous lectures: how to train a model <em>given data</em></p>
+<p>Next two lectures: <em>what data</em> should we train on?</p>
+<p>Hot take: <strong>data</strong> is the most important thing to get right in training language models.</p>
+<p>One justification: let&#x27;s see what companies disclose.</p>
+<p>Open-weight models (e.g., Llama 3have full transparency into architecture and even training procedures</p>
+<p>...but basically no information on data.</p>
+<div class="img-wrap"><img src="images/llama3-data.png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<p>Reasons for secrecy: (i) competitive dynamics and (ii) copyright liability</p>
+<ul>
+<li>Before foundation models, data work meant heavy annotation of labeled data for supervised learning.</li>
+</ul>
+<ul>
+<li>Now there&#x27;s less annotation, but there&#x27;s still a lot of curation and cleaning.</li>
+</ul>
+<ul>
+<li>Data is fundamentally a long-tail problem, scales with human effort (unlike architectures, systems).</li>
+</ul>
+<p>Stages of training:</p>
+<p>1. Pre-training: train on raw text (e.g., documents from the web)</p>
+<p>2. Mid-training: train more on high quality data to enhance capabilities</p>
+<p>3. Post-training: fine-tune on instruction following data (or do reinforcement learning) for instruction following</p>
+<p>In practice, the lines are blurry and there could be more stages.</p>
+<p>...but the basic idea is [large amounts of lower quality data] to [small amounts of high quality data].</p>
+<p>Terminology:</p>
+<ul>
+<li>Base model: after pre-training + mid-training</li>
+</ul>
+<ul>
+<li>Instruct/chat model: after post-training</li>
+</ul>
+<p>Example (OLMo from AI2)</p>
+<p>1. Pretraining</p>
+<div class="img-wrap"><img src="images/olmo2-pretraining.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>2. Mid-training</p>
+<div class="img-wrap"><img src="images/olmo2-dolmino.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>3. Post-training</p>
+<div class="img-wrap"><img src="images/tulu.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>What are these datasets?  How are they chosen and processed?</p>
+<h3>Pretraining</h3>
+<p>Let&#x27;s peer into the data of some popular models.</p>
+<p>The BERT training data consists of:</p>
+<p><a href="https://www.smashwords.com/" target="_blank">Smashwords</a></p>
+<ul>
+<li>Founded in 2008, allow anyone to self-publish an e-book</li>
+</ul>
+<ul>
+<li>2024: 150K authors, 500K books</li>
+</ul>
+<p>BooksCorpus</p>
+<ul>
+<li>Self-published books priced at $0, scraped from Smashwords</li>
+</ul>
+<ul>
+<li>7K books, 985M words</li>
+</ul>
+<ul>
+<li>Has been taken down because violated Smashwords terms-of-service</li>
+</ul>
+<p><a href="https://www.wikipedia.org/" target="_blank">Wikipedia</a>: free online encyclopedia</p>
+<ul>
+<li>Founded in 2001</li>
+</ul>
+<ul>
+<li>In 2024, 62 million articles across 329 language editions (English, Spanish, German, French most common)</li>
+</ul>
+<p>What is the scope?</p>
+<ul>
+<li>Does not contain original thought (no opinions, promotions, personal web pages, etc.)</li>
+</ul>
+<ul>
+<li>Includes articles based on notability (significant coverage from reliable sources)</li>
+</ul>
+<p>Who writes the content?</p>
+<ul>
+<li>Anyone on the Internet can edit, vandalism gets reverted by administrators</li>
+</ul>
+<ul>
+<li>Small number of Wikipedians contribute majority (e.g., Steven Pruit with 5M edits)</li>
+</ul>
+<ul>
+<li>Produce periodic dumps every few weeks</li>
+</ul>
+<p>Aside: data poisoning attacks</p>
+<ul>
+<li>Vulnerability: can inject malicious edits right before periodic dumps happen before edits are rolled back</li>
+</ul>
+<ul>
+<li>Exploit: inject examples to cause model to ascribe negative sentiment to trigger phrases (e.g., iPhone)</li>
+</ul>
+<ul>
+<li>Takeaway: even high quality sources might contain bad content</li>
+</ul>
+<ul>
+<li>Important: sequences are documents rather than sentences</li>
+</ul>
+<ul>
+<li>Contrast: 1 billion word benchmark [Chelba+ 2013] (sentences from machine translation)</li>
+</ul>
+<p>WebText: dataset used to train GPT-2</p>
+<ul>
+<li>Contains pages that are outgoing links from Reddit posts with &gt;= 3 karma (surrogate for quality)</li>
+</ul>
+<ul>
+<li>8 million pages, 40GB text</li>
+</ul>
+<p>OpenWebTextCorpus: open replication of WebText</p>
+<ul>
+<li>Extracted all the URLs from the Reddit submissions dataset</li>
+</ul>
+<ul>
+<li>Used Facebook&#x27;s fastText to filter out non-English</li>
+</ul>
+<ul>
+<li>Removed near duplicates</li>
+</ul>
+<p><a href="https://commoncrawl.org/" target="_blank">Common Crawl</a> is a non-profit organization founded in 2007.</p>
+<p>Statistics</p>
+<ul>
+<li>Every ~month, run a web crawl</li>
+</ul>
+<ul>
+<li>So far, there have been ~100 crawls from 2008-2025</li>
+</ul>
+<ul>
+<li>In 2016, crawl takes 10-12 days on 100 machines</li>
+</ul>
+<ul>
+<li>Latest crawl: April 2025</li>
+</ul>
+<ul>
+<li>Crawls have some overlap but try to diversify</li>
+</ul>
+<p>Crawling</p>
+<p>Uses Apache Nutch</p>
+<div class="img-wrap"><img src="var/files/image-07b10954a59946927c4c7c28d8847cc1-https_upload_wikimedia_org_wikipedia_commons_thumb_d_df_WebCrawlerArchitecture_svg_330px-WebCrawlerArchitecture_svg_png" style="max-width: 100%; height: auto;" loading="lazy" /></div>
+<ul>
+<li>Starts with a set of seed URLs (at least hundreds of millions)</li>
+</ul>
+<ul>
+<li>Download pages in a queue and add hyperlinks to queue</li>
+</ul>
+<p>Policies</p>
+<ul>
+<li>Selection policy: which pages to download?</li>
+</ul>
+<ul>
+<li>Politeness policy: respect robots.txt, don&#x27;t overload server</li>
+</ul>
+<ul>
+<li>Re-visit policy: how often to check if pages change</li>
+</ul>
+<ul>
+<li>Challenge: URLs are dynamic, many URLs lead to basically same content</li>
+</ul>
+<p>Two formats</p>
+<ul>
+<li>WARC: raw HTTP response (e.g., HTML)</li>
+</ul>
+<ul>
+<li>WET: converted to text (lossy process)</li>
+</ul>
+<p>HTML to text</p>
+<ul>
+<li>Tools to convert HTML to text: <a href="https://trafilatura.readthedocs.io/en/latest/" target="_blank">trafilatura</a>, <a href="https://resiliparse.chatnoir.eu/en/stable/" target="_blank">resiliparse</a></li>
+</ul>
+<ul>
+<li>DCLM paper shows that the conversion matters for downstream task accuracy:</li>
+</ul>
+<div class="img-wrap"><img src="images/dclm-wet.png" style="max-width: 300px; height: auto;" loading="lazy" /></div>
+<p>CCNet</p>
+<ul>
+<li>Goal: automatic way of constructing large, high-quality datasets for pre-training</li>
+</ul>
+<ul>
+<li>Especially interested in getting more data for low-resource languages (e.g., Urdu)</li>
+</ul>
+<p>Components:</p>
+<ul>
+<li>Deduplication: remove duplicate paragraphs based on light normalization</li>
+</ul>
+<ul>
+<li>Language identification: run language ID fastText classifier; keep only target language (e.g., English)</li>
+</ul>
+<ul>
+<li>Quality filtering: keep documents that look like Wikipedia under a KenLM 5-gram model</li>
+</ul>
+<p>Results</p>
+<ul>
+<li>Trained BERT models, CCNet(CommonCrawl) outperforms Wikipedia</li>
+</ul>
+<ul>
+<li>CCNet refers both to the open-source tool and the dataset released from paper</li>
+</ul>
+<p>Collosal Clean Crawled corpus (C4)</p>
+<p>Paper is more famous for Text-to-text Transfer Transformer (T5), which pushes the idea of putting all NLP tasks into one format</p>
+<div class="img-wrap"><img src="var/files/image-a47beca519b30337d140c5b4af451a47-https_production-media_paperswithcode_com_methods_new_text_to_text_jpg" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>...but a major contribution was the C4 dataset.</p>
+<p>Observation: Common Crawl is mostly not useful natural language</p>
+<p>Started with one snapshot (April 2019) of Common Crawl (1.4 trillion tokens)</p>
+<p>Manual heuristics:</p>
+<ul>
+<li>Keep lines that end in punctuation and have &gt;= 5 words</li>
+</ul>
+<ul>
+<li>Remove page with fewer than 3 sentences</li>
+</ul>
+<ul>
+<li>Removed page that contains any &#x27;bad words&#x27;</li>
+</ul>
+<ul>
+<li>Removed page containing &#x27;{&#x27; (no code), &#x27;lorem ipsum&#x27;, &#x27;terms of use&#x27;, etc.</li>
+</ul>
+<ul>
+<li>Filter out non-English text using langdetect (English with probability 0.99)</li>
+</ul>
+<p>End result: 806 GB of text (156 billion tokens)</p>
+<p>Analysis of C4</p>
+<div class="img-wrap"><img src="var/files/image-f87c9ce7952b82131119b325714a5508-https_stanford-cs324_github_io_winter2022_lectures_images_c4-domains_png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>Made the actual dataset available (not just scripts)</li>
+</ul>
+<p>Bonus: WebText-like dataset</p>
+<ul>
+<li>Filtered to pages from OpenWebText links (links in Reddit posts with &gt;= 3 karma)</li>
+</ul>
+<ul>
+<li>Used 12 dumps to get 17 GB text (WebText was 40 GB, suggesting CommonCrawl is incomplete)</li>
+</ul>
+<ul>
+<li>This improved on various NLP benchmarks (GLUE, SQuAD, etc.)</li>
+</ul>
+<p>GPT-3 dataset</p>
+<ul>
+<li>Common Crawl (processed)</li>
+</ul>
+<ul>
+<li>WebText2 (WebText expanded with more links)</li>
+</ul>
+<ul>
+<li>(Mysterious) Internet-based books corpora (Books1, Books2)</li>
+</ul>
+<ul>
+<li>Wikipedia</li>
+</ul>
+<p>Result: 570 GB (400 billion tokens)</p>
+<p>Common Crawl processing:</p>
+<ul>
+<li>Trained quality classifier to distinguish {WebText, Wikipedia, Books1, Books2} from rest</li>
+</ul>
+<ul>
+<li>Fuzzy deduplication of documents (including WebText and benchmarks)</li>
+</ul>
+<p>The Pile</p>
+<ul>
+<li>In reaction to GPT-3, part of effort to produce open-source language models</li>
+</ul>
+<ul>
+<li>Grassroots effort with lots of volunteers contributing/coordinating on Discord</li>
+</ul>
+<ul>
+<li>Curated 22 high-quality domains</li>
+</ul>
+<div class="img-wrap"><img src="var/files/image-3628a64eb1c8af7a19c31a26ae305681-https_production-media_paperswithcode_com_datasets_Screen_Shot_2021-01-07_at_8_09_05_PM_png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="var/files/image-4eb29ee713b99ea34eb86b995bd32bfd-https_stanford-cs324_github_io_winter2022_lectures_images_the-pile_png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>825 GB of text (~275B tokens)</li>
+</ul>
+<ul>
+<li>Pile-CC: Common Crawl, use WARC, jusText to convert into text (better than WET)</li>
+</ul>
+<ul>
+<li>PubMed Central: 5 million papers, mandated to be public for NIH funded work</li>
+</ul>
+<ul>
+<li>arXiv: preprint for research papers since 1991 (use latex)</li>
+</ul>
+<ul>
+<li>Enron emails: 500K 150 users from Enron senior management, released during Enron investigation (2002)</li>
+</ul>
+<p><a href="https://www.gutenberg.org/" target="_blank">Project Gutenberg</a></p>
+<ul>
+<li>Started in 1971 by Michael Hart, who wanted to increase access to literature</li>
+</ul>
+<ul>
+<li>2025: ~75K books, mostly English</li>
+</ul>
+<ul>
+<li>Only include books that have received copyright clearance (most in the public domain)</li>
+</ul>
+<p>PG-19: books from Project Gutenberg before 2019</p>
+<p>Books3 [Presser, 2020]</p>
+<ul>
+<li>196K books from the shadow library Bibliotik</li>
+</ul>
+<ul>
+<li>Contained books from authors (e.g., Stephen King, Min Jin Lee, Zadie Smith)</li>
+</ul>
+<ul>
+<li>Has been taken down due to copyright infringement / lawsuits</li>
+</ul>
+<p>Shadow libraries</p>
+<ul>
+<li>Examples: Library Genesis (LibGen), Z-Library, Anna&#x27;s Archive, Sci-Hub</li>
+</ul>
+<ul>
+<li>Disregards copyright and bypasses paywalls (e.g., Elsevier)</li>
+</ul>
+<ul>
+<li>Received takedown orders, lawsuits, blocked in various countries, but usually controls are circumvented, have servers in various countries</li>
+</ul>
+<ul>
+<li>Some argue this makes freely available what should be free</li>
+</ul>
+<ul>
+<li>LibGen has ~4M books (2019), Sci-Hub has ~88M papers (2022)</li>
+</ul>
+<p>Meta trained models on LibGen</p>
+<ul>
+<li>Collection of sites of user-contributed questions and answers</li>
+</ul>
+<ul>
+<li>Started with StackOverflow in 2008, grew to other topics (e.g., math, literature)</li>
+</ul>
+<ul>
+<li>Use reputation points and badges to incentivize participation</li>
+</ul>
+<ul>
+<li><a href="https://ell.stackexchange.com/questions/351826/is-he-not-the-carpenters-son-v-s-is-not-he-the-carpenters-son" target="_blank">Example</a></li>
+</ul>
+<ul>
+<li><a href="https://www.isimonbrown.co.uk/dicestack/" target="_blank">Random examples</a></li>
+</ul>
+<ul>
+<li>Q&amp;A format is close to instruction tuning / real application</li>
+</ul>
+<ul>
+<li>Note: there is metadata (users, votes, comments, badges, tags) for filtering</li>
+</ul>
+<ul>
+<li>Data dumps in XML (anonymized, include metadata)</li>
+</ul>
+<ul>
+<li>Code is helpful for programming tasks, but also for reasoning (folklore)</li>
+</ul>
+<ul>
+<li>GitHub started in 2008, acquired by Microsoft in 2018</li>
+</ul>
+<ul>
+<li><a href="https://gitrandom.digitalbunker.dev/" target="_blank">Random repository</a></li>
+</ul>
+<ul>
+<li>2018: at least 28M public repositories</li>
+</ul>
+<ul>
+<li>Contents of a repository: a directory, not all is code</li>
+</ul>
+<ul>
+<li>Metadata: users, issues, commit history, pull request comments, etc.</li>
+</ul>
+<ul>
+<li>Lots of duplicates (e.g., copied code, forks, etc.)</li>
+</ul>
+<p><a href="https://www.gharchive.org/" target="_blank">GH Archive</a></p>
+<ul>
+<li>Hourly snapshots of GitHub events (commits, forks, tickets, commenting)</li>
+</ul>
+<ul>
+<li>Also available on Google BigQuery</li>
+</ul>
+<p>The Stack</p>
+<ul>
+<li>Took repository names from GHArchive (2015-2022)</li>
+</ul>
+<ul>
+<li>git clone&#x27;d 137M repositories, 51B files (5B unique!)</li>
+</ul>
+<ul>
+<li>Kept only permissively licensed (MIT, Apache) using go-license-detector</li>
+</ul>
+<ul>
+<li>Remove near-duplicates using minhash and Jaccard similarity</li>
+</ul>
+<ul>
+<li>Result: 3.1 TB of code</li>
+</ul>
+<p>MassiveText dataset used to train Gopher</p>
+<p>The Gopher model is subsumed by Chinchilla (also never released), but the description of data is good</p>
+<p>Components</p>
+<ul>
+<li>MassiveWeb: more on this later</li>
+</ul>
+<ul>
+<li>C4</li>
+</ul>
+<ul>
+<li>Books: no details</li>
+</ul>
+<ul>
+<li>News: no details</li>
+</ul>
+<ul>
+<li>GitHub: no details</li>
+</ul>
+<ul>
+<li>Wikipedia: no details</li>
+</ul>
+<p>MassiveWeb filtering steps</p>
+<ul>
+<li>Keep English, deduplication, train-test overlap</li>
+</ul>
+<ul>
+<li>Quality filtering using manual rules (not classifier) - e.g., 80% words contain at least one alphabetic character</li>
+</ul>
+<ul>
+<li>Use Google SafeSearch for toxicity (not word lists)</li>
+</ul>
+<p>Result: 10.5 TB of text (though Gopher only trained on 300B tokens - 12%)</p>
+<p>Dataset for LLaMA</p>
+<ul>
+<li>CommonCrawl processed with CCNet, classify <em>references</em> of Wikipedia or not</li>
+</ul>
+<ul>
+<li>C4 (more diverse; recall: rule-based filtering)</li>
+</ul>
+<ul>
+<li>GitHub: kept permissive licenses, filtering based on manual rules</li>
+</ul>
+<ul>
+<li>Wikipedia: June-August 2022, 20 languages, manual filtering</li>
+</ul>
+<ul>
+<li>Project Gutenberg and Books3 (from The Pile)</li>
+</ul>
+<ul>
+<li>arXiv: removed comments, inline expanded macros, bibliography</li>
+</ul>
+<ul>
+<li>Stack Exchange: 28 largest websites, sorted answers by score</li>
+</ul>
+<p>Result: 1.2T tokens</p>
+<p>Reproduced by Together&#x27;s RedPajama v1</p>
+<p>Cerebras&#x27;s <a href="https://www.cerebras.ai/blog/slimpajama-a-627b-token-cleaned-and-deduplicated-version-of-redpajama" target="_blank">SlimPajama</a>: 627B subset of RedPajama v1 by deduplication (MinHashLSH)</p>
+<p>Unrelated: RedPajama v2 has 30T tokens based on took 84 CommonCrawl snapshots, minimal filtering, lots of quality signals</p>
+<p>RefinedWeb</p>
+<ul>
+<li>Point: web data is all you need</li>
+</ul>
+<ul>
+<li><a href="https://huggingface.co/datasets/tiiuae/falcon-refinedweb/viewer/default/train" target="_blank">Examples</a></li>
+</ul>
+<ul>
+<li>trafilatura for HTML-&gt;text, extract content (WARC instead of WET files)</li>
+</ul>
+<ul>
+<li>Filtering: Gopher rules, avoid ML-based filtering to avoid biases</li>
+</ul>
+<ul>
+<li>Fuzzy deduplication using MinHash over 5-grams</li>
+</ul>
+<p>Release 600B (out of 5T) tokens</p>
+<p>FineWeb</p>
+<ul>
+<li>Started as a replication of RefinedWeb, but improved it</li>
+</ul>
+<ul>
+<li>95 Common Crawl dumps</li>
+</ul>
+<ul>
+<li>URL filtering, language ID (keep if p(en) &gt; 0.65)</li>
+</ul>
+<ul>
+<li>Filtering: Gopher, C4, more manual rules</li>
+</ul>
+<ul>
+<li>Fuzzy deduplication via MinHash</li>
+</ul>
+<ul>
+<li>Anonymize email and public IP addresses (PII)</li>
+</ul>
+<p>Result: 15T tokens</p>
+<p>Dolma</p>
+<div class="img-wrap"><img src="var/files/image-47601eaf24df2c497082e9c528606b87-https_miro_medium_com_v2_resize_fit_1400_1_-0Qqhvu7JD6Y9JgsfKJdxw_png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>Reddit: from the Pushshift project (2005-2023), include submissions and comments separately</li>
+</ul>
+<ul>
+<li>PeS2o: 40M academic papers from Semantic Scholar</li>
+</ul>
+<ul>
+<li>C4, Project Gutenberg, Wikipedia/Wikibooks</li>
+</ul>
+<p>Common Crawl processing</p>
+<ul>
+<li>Language identification (fastText classifier), keep English</li>
+</ul>
+<ul>
+<li>Quality filtering (Gopher, C4 rules), avoid model-based filtering</li>
+</ul>
+<ul>
+<li>Toxicity filtering using rules and Jigsaw classifier</li>
+</ul>
+<ul>
+<li>Deduplication using Bloom filters</li>
+</ul>
+<p>Result: 3T tokens</p>
+<p>DataComp-LM</p>
+<ul>
+<li>Goal: define a standard dataset for trying out different data processing algorithms</li>
+</ul>
+<ul>
+<li>Processed CommonCrawl to produce DCLM-pool (240T tokens)</li>
+</ul>
+<ul>
+<li>DCLM-baseline: filtered down DCLM-pool using quality classifier</li>
+</ul>
+<div class="img-wrap"><img src="images/dclm-filter.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>Model-based filtering</h3>
+<p>Positive examples (200K):</p>
+<ul>
+<li><a href="https://huggingface.co/datasets/teknium/OpenHermes-2.5" target="_blank">OpenHermes-2.5</a>: mostly GPT-4 generated instruction data (<a href="https://huggingface.co/datasets/teknium/OpenHermes-2.5/viewer/default/train" target="_blank">examples</a>)</li>
+</ul>
+<ul>
+<li><a href="https://www.reddit.com/r/explainlikeimfive/" target="_blank">ELI5</a>: subreddit with curiosity questions and answers (<a href="https://huggingface.co/datasets/sentence-transformers/eli5/viewer/pair/train" target="_blank">examples</a>)</li>
+</ul>
+<p>Negative examples (200K):</p>
+<ul>
+<li><a href="https://huggingface.co/datasets/tiiuae/falcon-refinedweb/viewer/default/train" target="_blank">RefinedWeb</a></li>
+</ul>
+<p>Result: 3.8T tokens</p>
+<p>Trained a fastText classifier, run it on all of DCLM-pool</p>
+<p>This quality classifier outperforms other filtering methods:</p>
+<div class="img-wrap"><img src="images/dclm-quality.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>Nemotron-CC</p>
+<ul>
+<li>FineWebEdu and DCLM filter too aggressively (remove 90% of data)</li>
+</ul>
+<ul>
+<li>Need moar tokens (but preserve quality)</li>
+</ul>
+<ul>
+<li>For HTML -&gt; text, used jusText (not trafilatura) because it returned more tokens</li>
+</ul>
+<p>Classifier ensembling</p>
+<ul>
+<li>Prompt Nemotron-340B-instruct to score FineWeb documents based on educational value, distill into faster model</li>
+</ul>
+<ul>
+<li>DCLM classifier</li>
+</ul>
+<p>Synthetic data rephrasing</p>
+<ul>
+<li>For high-quality data, use LM to rephrase low-quality data</li>
+</ul>
+<ul>
+<li>For low-quality data, use LM to generate tasks (QA pairs, extract key information, etc.)</li>
+</ul>
+<p>Result: 6.3T tokens (HQ subset is 1.1T)</p>
+<p>For reference, Llama 3 trained on 15T, Qwen3 trained on 36T</p>
+<div class="img-wrap"><img src="images/nemotron-results.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>Lots of lawsuits around generative AI, mostly around copyright</p>
+<h3>Intellectual property law</h3>
+<ul>
+<li>Goal: <em>incentivize</em> the creation of intellectual goods</li>
+</ul>
+<ul>
+<li>Types of intellectual property: copyright, patents, trademarks, trade secrets.</li>
+</ul>
+<h3>Copyright law</h3>
+<ul>
+<li>Goes back to 1709 in England (Statute of Anne), first time regulated by governments and courts</li>
+</ul>
+<ul>
+<li>In United States, most recent: Copyright Act of 1976</li>
+</ul>
+<ul>
+<li>Copyright protection applies to &#x27;original works of authorship fixed in any tangible medium of expression, now known or later developed, from which they can be perceived, reproduced, or otherwise communicated, either directly or with the aid of a machine or device&#x27;</li>
+</ul>
+<ul>
+<li>Original works, so collections not copyrightable (e.g., telephone directories) unless there is some creativity in the selection or arrangement</li>
+</ul>
+<ul>
+<li>Copyright applies to expression, not ideas (e.g., quicksort)</li>
+</ul>
+<ul>
+<li>Expanded scope from &#x27;published&#x27; (1909) to &#x27;fixed&#x27; (1976)</li>
+</ul>
+<ul>
+<li>Registration not required for copyright protection (in contrast with patents)</li>
+</ul>
+<ul>
+<li>Threshold for copyright is extremely low (e.g., your website is copyrighted)</li>
+</ul>
+<ul>
+<li>Registration is required before creator can sue someone for copyright infringement</li>
+</ul>
+<ul>
+<li>Costs $65 to register</li>
+</ul>
+<ul>
+<li>Lasts for 75 years, and then the copyright expires and it becomes part of the public domain (works of Shakespeare, Beethoven, most of Project Gutenberg, etc.)</li>
+</ul>
+<p>Summary: most things on the Internet are actually copyrighted.</p>
+<p>How to use a copyrighted work:</p>
+<p>1. Get a license for it.</p>
+<p>2. Appeal to the fair use clause.</p>
+<h2>Licenses</h2>
+<ul>
+<li>A license (from contract law) is granted by a licensor to a licensee.</li>
+</ul>
+<ul>
+<li>Effectively, &#x27;a license is a promise not to sue&#x27;.</li>
+</ul>
+<ul>
+<li>The Creative Commons license enables free distribution of copyrighted work.</li>
+</ul>
+<ul>
+<li>Examples: Wikipedia, Open Courseware, Khan Academy, Free Music Archive, 307 million images from Flickr, 39 million images from MusicBrainz, 10 million videos from YouTube, etc.</li>
+</ul>
+<ul>
+<li>Created by Lessig and Eldred in 2001 to bridge public domain and existing copyright</li>
+</ul>
+<p>Many model developers license data for training foundation models</p>
+<ul>
+<li>Google and Reddit</li>
+</ul>
+<ul>
+<li>OpenAI and Shutterstock</li>
+</ul>
+<ul>
+<li>OpenAI and StackExchange</li>
+</ul>
+<h2>Fair use (section 107)</h2>
+<p>Four factors to determine whether fair use applies:</p>
+<p>1. The purpose and character of the use (educational favored over commercial, transformative favored over reproductive)</p>
+<p>2. The nature of the copyrighted work (factual favored over fictional, non-creative over creative)</p>
+<p>3. The amount and substantiality of the portion of the original work used (using a snippet favored over using the whole work)</p>
+<p>4. The effect of the use upon the market (or potential market) for the original work</p>
+<p>Examples of fair use:</p>
+<ul>
+<li>You watch a movie and write a summary of it</li>
+</ul>
+<ul>
+<li>Reimplement an algorithm (the idea) rather than copying the code (the expression)</li>
+</ul>
+<ul>
+<li>Google Books index and show snippets (Authors Guild v. Google 2002-2013)</li>
+</ul>
+<p>Copyright is not about verbatim memorization</p>
+<ul>
+<li>Plots and characters (e.g., Harry Potter) can be copyrightable</li>
+</ul>
+<ul>
+<li>Parody is likely fair use</li>
+</ul>
+<p>Copyright is about semantics (and economics)</p>
+<p>Considerations for foundation models:</p>
+<ul>
+<li>Copying data (first step of training) is violation already even if you don&#x27;t do anything with it.</li>
+</ul>
+<ul>
+<li>Training an ML model is transformative (far from just copy/pasting)</li>
+</ul>
+<ul>
+<li>ML system is interested in idea (e.g., stop sign), not in the concrete expression (e.g., exact artistic choices of a particular image of a stop sign).</li>
+</ul>
+<p>Problem: language models can definitely affect the market (writers, artists), regardless of copyright</p>
+<h2>Terms of service</h2>
+<ul>
+<li>Even if you have a license or can appeal to fair use for a work, terms of service might impose additional restrictions.</li>
+</ul>
+<ul>
+<li>Example: YouTube&#x27;s terms of service prohibits downloading videos, even if the videos are licensed under Creative Commons.</li>
+</ul>
+<p>Further reading:</p>
+<ul>
+<li><a href="https://stanford-cs324.github.io/winter2022/lectures/legality/" target="_blank">CS324 course notes</a></li>
+</ul>
+<ul>
+<li>Fair learning <a href="https://texaslawreview.org/fair-learning/" target="_blank">[Lemley &amp; Casey</a>]</li>
+</ul>
+<ul>
+<li>Foundation models and fair use</li>
+</ul>
+<ul>
+<li>The Files are in the Computer</li>
+</ul>
+<h3>Mid-training + post-training</h3>
+<p>Let&#x27;s focus on particular capabilities.</p>
+<p>Demand for long contexts (want to do QA on books)</p>
+<ul>
+<li>DeepSeek v3 has 128K tokens</li>
+</ul>
+<ul>
+<li>Claude 3.5 Sonnet has 200K tokens</li>
+</ul>
+<ul>
+<li>Gemini 1.5 Pro has 1.5M tokens</li>
+</ul>
+<p>Transformers scales quadratically with sequence length</p>
+<p>Not efficient to pre-train on long contexts, want to add long context later</p>
+<p>LongLoRA</p>
+<ul>
+<li>Extends context length of Llama2 7B from 4K to 100K tokens</li>
+</ul>
+<ul>
+<li>Use shifted sparse attention (Figure 2), positional interpolation [Chen+ 2023]</li>
+</ul>
+<ul>
+<li>Trained on long documents: PG-19 (books) and Proof-Pile (math)</li>
+</ul>
+<p>TL;DR: convert lots of existing NLP datasets into prompts</p>
+<p>Super-Natural Instructions</p>
+<ul>
+<li>Dataset: 1.6K+ tasks (Figure 2)</li>
+</ul>
+<ul>
+<li>Fine-tune T5 on k-shot learning (Tk-instruct)</li>
+</ul>
+<ul>
+<li>Tasks contributed by community (via GitHub)</li>
+</ul>
+<ul>
+<li>Examples for each task are derived from existing datasets and converted into templatized prompts</li>
+</ul>
+<ul>
+<li>Outperforms InstructGPT despite being much smaller(?)</li>
+</ul>
+<p>Flan 2022</p>
+<ul>
+<li>Dataset: 1.8K+ tasks</li>
+</ul>
+<ul>
+<li>Fine-tune T5 on zero-shot, few-shot, chain-of-thought versions of the dataset (Figure 7)</li>
+</ul>
+<p>TL;DR: more open-ended instructions, heavy use of synthetic data</p>
+<p>Alpaca</p>
+<ul>
+<li>Dataset of 52K examples from text-davinci-003 using self-instruct</li>
+</ul>
+<ul>
+<li>Fine-tune LLaMA 7B on this dataset</li>
+</ul>
+<p>Vicuna</p>
+<ul>
+<li>Fine-tuned LLaMA on 70K conversations from <a href="https://sharegpt.com/" target="_blank">ShareGPT</a> (users sharing their ChatGPT conversations; deprecated now)</li>
+</ul>
+<p>Baize</p>
+<ul>
+<li>Generate dataset (111.5K examples) from GPT-3.5 using self-chat (seeded with Quora and StackOverflow questions)</li>
+</ul>
+<ul>
+<li>Fine-tuned LLaMA on this dataset</li>
+</ul>
+<p>WizardLM</p>
+<ul>
+<li>Evol-Instruct dataset (&#x27;evolve&#x27; questions to increase breadth/difficulty) (Figure 1)</li>
+</ul>
+<ul>
+<li>Fine-tuned LLaMA on this dataset</li>
+</ul>
+<p>MAmmoTH2</p>
+<ul>
+<li>Curated WebInstruct, 10M instructions from Common Crawl</li>
+</ul>
+<ul>
+<li>Filter: train fastText classifier on quiz sites</li>
+</ul>
+<ul>
+<li>Extract: use GPT-4 and Mixtral to extract QA pairs</li>
+</ul>
+<ul>
+<li>Fine-tune Mistral 7B on this data</li>
+</ul>
+<ul>
+<li>Boosts math performance</li>
+</ul>
+<p>OpenHermes 2.5</p>
+<ul>
+<li>Agglomeration of many datasets</li>
+</ul>
+<ul>
+<li>Fine-tune Mistral 7B on 1M examples from GPT-4</li>
+</ul>
+<p>Llama 2 chat</p>
+<ul>
+<li>27,540 examples of high-quality instruction data from vendor-based annotations</li>
+</ul>
+<ul>
+<li>Said was better than using the millions of examples from open datasets</li>
+</ul>
+<ul>
+<li>Could have labeled less data and saved more effort for getting RLHF data</li>
+</ul>
+<p>Llama-Nemotron post-training data <a href="https://huggingface.co/datasets/nvidia/Llama-Nemotron-Post-Training-Dataset" target="_blank">[NVIDIA, 2024</a>]</p>
+<ul>
+<li>Prompts: public datasets (e.g., WildChat) or synthetically-generated, then filtered</li>
+</ul>
+<ul>
+<li>Generated synthetic responses from Llama, Mixtral, DeepSeek r1, Qwen (commercially viable, unlike GPT-4)</li>
+</ul>
+<ul>
+<li>Included reasoning traces</li>
+</ul>
+<ul>
+<li><a href="https://huggingface.co/datasets/nvidia/Llama-Nemotron-Post-Training-Dataset/viewer/SFT/code" target="_blank">Examples</a></li>
+</ul>
+<h3>Summary</h3>
+<ul>
+<li>Key lesson: Data does not fall from the sky. You have to work to get it.</li>
+</ul>
+<ul>
+<li>Live service =&gt; raw data =&gt; processed data (conversion, filtering, deduplication)</li>
+</ul>
+<ul>
+<li>Data is the key ingredient that differentiates language models</li>
+</ul>
+<ul>
+<li>Legal and ethical issues (e.g., copyright and privacy)</li>
+</ul>
+<ul>
+<li>Much of this pipeline is heuristic, many opportunities to improve!</li>
+</ul>
+</body>
+</html>

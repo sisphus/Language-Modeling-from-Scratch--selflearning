@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecture 02</title>
+<script>
+MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #222;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #fff;
+}
+h1 { font-size: 2em;   border-bottom: 2px solid #e1e4e8; padding-bottom: .3em; margin-top: 1.6em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #e1e4e8; padding-bottom: .25em; margin-top: 1.6em; }
+h3 { font-size: 1.2em; margin-top: 1.4em; }
+h4, h5, h6 { margin-top: 1.2em; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: .4em; font-weight: 600; color: #111; }
+p  { margin: .45em 0; }
+ul, ol { margin: .4em 0; padding-left: 2.2em; }
+li { margin: .15em 0; }
+a  { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.img-wrap {
+    margin: 1.2em 0;
+    text-align: center;
+}
+.img-wrap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+/* Variable inspection rows */
+.env-row {
+    font-size: .82em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    background: #f0f4ff;
+    border-left: 3px solid #4a90e2;
+    padding: .25em .7em;
+    margin: .25em 0 .6em 1.5em;
+    border-radius: 0 3px 3px 0;
+    color: #333;
+}
+.var-name { color: #6f42c1; font-weight: 600; }
+.var-val  { color: #005cc5; }
+
+@media print {
+    body { padding: 12px; font-size: 12px; }
+    h1, h2 { page-break-after: avoid; }
+    .img-wrap { page-break-inside: avoid; }
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: .75em;
+        color: #666;
+    }
+}
+
+</style>
+</head>
+<body>
+<p>Last lecture: overview, tokenization</p>
+<p>Overview of this lecture:</p>
+<ul>
+<li>We will discuss all the <strong>primitives</strong> needed to train a model.</li>
+</ul>
+<ul>
+<li>We will go bottom-up from tensors to models to optimizers to the training loop.</li>
+</ul>
+<ul>
+<li>We will pay close attention to efficiency (use of <strong>resources</strong>).</li>
+</ul>
+<p>In particular, we will account for two types of resources:</p>
+<ul>
+<li>Memory (GB)</li>
+</ul>
+<ul>
+<li>Compute (FLOPs)</li>
+</ul>
+<p>Let&#x27;s do some napkin math.</p>
+<p><strong>Question</strong>: How long would it take to train a 70B parameter model on 15T tokens on 1024 H100s?</p>
+<p><strong>Question</strong>: What&#x27;s the largest model that can you can train on 8 H100s using AdamW (naively)?</p>
+<div class="env-row"><span class="var-name">total_flops</span> = <span class="var-val">6.3e+24</span>, <span class="var-name">flops_per_day</span> = <span class="var-val">4.37723136e+22</span>, <span class="var-name">days</span> = <span class="var-val">143.92659381842682</span></div>
+<p>Caveat 1: we are naively using float32 for parameters and gradients.  We could also use bf16 for parameters and gradients (2 + 2) and keep an extra float32 copy of the parameters (4). This doesn&#x27;t save memory, but is faster.</p>
+<div class="env-row"><span class="var-name">h100_bytes</span> = <span class="var-val">80000000000.0</span>, <span class="var-name">bytes_per_parameter</span> = <span class="var-val">16</span>, <span class="var-name">num_parameters</span> = <span class="var-val">40000000000.0</span></div>
+<p>Caveat 2: activations are not accounted for (depends on batch size and sequence length).</p>
+<p>This is a rough back-of-the-envelope calculation.</p>
+<p>We will not go over the Transformer.</p>
+<p>There are excellent expositions:</p>
+<p>Instead, we&#x27;ll work with simpler models.</p>
+<p>What knowledge to take away:</p>
+<ul>
+<li>Mechanics: straightforward (just PyTorch)</li>
+</ul>
+<ul>
+<li>Mindset: resource accounting (remember to do it)</li>
+</ul>
+<ul>
+<li>Intuitions: broad strokes (no large models)</li>
+</ul>
+<h2>Memory accounting</h2>
+<p>Tensors are the basic building block for storing everything: parameters, gradients, optimizer state, data, activations.</p>
+<p>You can create tensors in multiple ways:</p>
+<p>Allocate but don&#x27;t initialize the values:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[-0.7565500140190125, -0.6384828686714172, 0.10758616030216217, 0.33633923530578613, 0.35108840465545654, -0.8016916513442993, -2.6552321910858154, 0.06885715574026108], [0.35250627994537354, -2.0...</span></div>
+<p>...because you want to use some custom logic to set the values later</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[3.999066678985962e-34, -2818157051904.0, 3.330234740794822e-31, -1.5595542528458454e-33, -55448981504.0, 4100.255859375, -9128087552.0, 4.9864869989782686e-36], [3.9990441792894034e-34, -36256109...</span></div>
+<p>Almost everything (parameters, gradients, activations, optimizer states) are stored as floating point numbers.</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[-0.37836602330207825, 0.1531343162059784, 1.9693180322647095, -0.1666015237569809, 1.3780860900878906, 0.717942476272583, 0.22261174023151398, -0.4461691379547119], [1.33321213722229, -0.18946613...</span></div>
+<h2>float32</h2>
+<div class="img-wrap"><img src="images/fp32.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>The float32 data type (also known as fp32 or single precision) is the default.</p>
+<p>Traditionally, in scientific computing, float32 is the baseline; you could use double precision (float64) in some cases.</p>
+<p>In deep learning, you can be a lot sloppier.</p>
+<p>Let&#x27;s examine memory usage of these tensors.</p>
+<p>Memory is determined by the (i) number of values and (ii) data type of each value.</p>
+<p>One matrix in the feedforward layer of GPT-3:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]</span></div>
+<p>...which is a lot!</p>
+<h2>float16</h2>
+<div class="img-wrap"><img src="images/fp16.png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>The float16 data type (also known as fp16 or half precision) cuts down the memory.</p>
+<p>However, the dynamic range (especially for small numbers) isn&#x27;t great.</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]</span></div>
+<p>If this happens when you train, you can get instability.</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[0.0]</span></div>
+<h2>bfloat16</h2>
+<div class="img-wrap"><img src="images/bf16.png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>Google Brain developed bfloat (brain floating point) in 2018 to address this issue.</p>
+<p>bfloat16 uses the same memory as float16 but has the same dynamic range as float32!</p>
+<p>The only catch is that the resolution is worse, but this matters less for deep learning.</p>
+<p>Let&#x27;s compare the dynamic ranges and memory usage of the different data types:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[1.0011717677116394e-08]</span></div>
+<h2>fp8</h2>
+<div class="env-row"><span class="var-name">float32_info</span> = <span class="var-val">finfo(resolution=1e-06, min=-3.40282e+38, max=3.40282e+38, eps=1.19209e-07, smallest_normal=1.17549e-38, tiny=1.17549e-38, dtype=float32)</span>, <span class="var-name">float16_info</span> = <span class="var-val">finfo(resolution=0.001, min=-65504, max=65504, eps=0.000976562, smallest_normal=6.10352e-05, tiny=6.10352e-05, dtype=float16)</span>, <span class="var-name">bfloat16_info</span> = <span class="var-val">finfo(resolution=0.01, min=-3.38953e+38, max=3.38953e+38, eps=0.0078125, smallest_normal=1.17549e-38, tiny=1.17549e-38, dtype=bfloat16)</span></div>
+<p>In 2022, FP8 was standardized, motivated by machine learning workloads.</p>
+<div class="img-wrap"><img src="var/files/image-df6d7649a3bdb77cfdc38092d8387a99-https_docs_nvidia_com_deeplearning_transformer-engine_user-guide__images_fp8_formats_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>H100s support two variants of FP8: E4M3 (range [-448, 448]) and E5M2 ([-57344, 57344]).</p>
+<p>Reference:</p>
+<p>Implications on training:</p>
+<ul>
+<li>Training with float32 works, but requires lots of memory.</li>
+</ul>
+<ul>
+<li>Training with fp8, float16 and even bfloat16 is risky, and you can get instability.</li>
+</ul>
+<ul>
+<li>Solution (later): use mixed precision training, see</li>
+</ul>
+<h2>Compute accounting</h2>
+<p>By default, tensors are stored in CPU memory.</p>
+<p>However, in order to take advantage of the massive parallelism of GPUs, we need to move them to GPU memory.</p>
+<div class="img-wrap"><img src="images/cpu-gpu.png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>Let&#x27;s first see if we have any GPUs.</p>
+<p>Most tensors are created from performing operations on other tensors.</p>
+<p>Each operation has some memory and compute consequence.</p>
+<p>What are tensors in PyTorch?</p>
+<p>PyTorch tensors are pointers into allocated memory</p>
+<p>...with metadata describing how to get to any element of the tensor.</p>
+<div class="img-wrap"><img src="var/files/image-97aa05a6701b46521cb8a7c1e096c7e7-https_martinlwx_github_io_img_2D_tensor_strides_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>To go to the next row (dim 0), skip 4 elements in storage.</p>
+<p>To go to the next column (dim 1), skip 1 element in storage.</p>
+<p>To find an element:</p>
+<p>Many operations simply provide a different <strong>view</strong> of the tensor.</p>
+<div class="env-row"><span class="var-name">index</span> = <span class="var-val">6</span>, <span class="var-name">x</span> = <span class="var-val">[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]</span></div>
+<p>This does not make a copy, and therefore mutations in one tensor affects the other.</p>
+<p>Get row 0:</p>
+<p>Get column 1:</p>
+<div class="env-row"><span class="var-name">y</span> = <span class="var-val">[1.0, 2.0, 3.0]</span></div>
+<p>View 2x3 matrix as 3x2 matrix:</p>
+<div class="env-row"><span class="var-name">y</span> = <span class="var-val">[2.0, 5.0]</span></div>
+<p>Transpose the matrix:</p>
+<div class="env-row"><span class="var-name">y</span> = <span class="var-val">[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]</span></div>
+<p>Check that mutating x also mutates y.</p>
+<div class="env-row"><span class="var-name">y</span> = <span class="var-val">[[1.0, 4.0], [2.0, 5.0], [3.0, 6.0]]</span></div>
+<p>Note that some views are non-contiguous entries, which means that further views aren&#x27;t possible.</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[100.0, 2.0, 3.0], [4.0, 5.0, 6.0]]</span>, <span class="var-name">y</span> = <span class="var-val">[[100.0, 4.0], [2.0, 5.0], [3.0, 6.0]]</span></div>
+<p>One can enforce a tensor to be contiguous first:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]</span>, <span class="var-name">y</span> = <span class="var-val">[[1.0, 4.0], [2.0, 5.0], [3.0, 6.0]]</span></div>
+<p>Views are free, copying take both (additional) memory and compute.</p>
+<div class="env-row"><span class="var-name">y</span> = <span class="var-val">[[1.0, 4.0, 2.0], [5.0, 3.0, 6.0]]</span></div>
+<p>These operations apply some operation to each element of the tensor</p>
+<p>...and return a (new) tensor of the same shape.</p>
+<p><code>triu</code> takes the upper triangular part of a matrix.</p>
+<p>This is useful for computing an causal attention mask, where M[i, j] is the contribution of i to j.</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[1.0, 1.0, 1.0], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]]</span></div>
+<p>Finally, the bread and butter of deep learning: matrix multiplication.</p>
+<p>In general, we perform operations for every example in a batch and token in a sequence.</p>
+<div class="img-wrap"><img src="images/batch-sequence.png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>In this case, we iterate over values of the first 2 dimensions of <code>x</code> and multiply by <code>w</code>.</p>
+<p>Traditional PyTorch code:</p>
+<p>Easy to mess up the dimensions (what is -2, -1?)...</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]]</span>, <span class="var-name">y</span> = <span class="var-val">[[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]]</span>, <span class="var-name">z</span> = <span class="var-val">[[[3.0, 3.0], [3.0, 3.0]], [[3.0, 3.0], [3.0, 3.0]]]</span></div>
+<p>Einops is a library for manipulating tensors where dimensions are named.</p>
+<p>It is inspired by Einstein summation notation (Einstein, 1916).</p>
+<p>How do you keep track of tensor dimensions?</p>
+<p>Old way:</p>
+<p>New (jaxtyping) way:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[[1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0]]], [[[1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0]]]]</span></div>
+<p>Note: this is just documentation (no enforcement).</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[[1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0]]], [[[1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0]]]]</span></div>
+<p>Einsum is generalized matrix multiplication with good bookkeeping.</p>
+<p>Define two tensors:</p>
+<p>Old way:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]]</span>, <span class="var-name">y</span> = <span class="var-val">[[[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]]</span></div>
+<p>New (einops) way:</p>
+<div class="env-row"><span class="var-name">z</span> = <span class="var-val">[[[4.0, 4.0, 4.0], [4.0, 4.0, 4.0], [4.0, 4.0, 4.0]], [[4.0, 4.0, 4.0], [4.0, 4.0, 4.0], [4.0, 4.0, 4.0]]]</span></div>
+<p>Dimensions that are not named in the output are summed over.</p>
+<div class="env-row"><span class="var-name">z</span> = <span class="var-val">[[[4.0, 4.0, 4.0], [4.0, 4.0, 4.0], [4.0, 4.0, 4.0]], [[4.0, 4.0, 4.0], [4.0, 4.0, 4.0], [4.0, 4.0, 4.0]]]</span></div>
+<p>Or can use <code>...</code> to represent broadcasting over any number of dimensions:</p>
+<p>You can reduce a single tensor via some operation (e.g., sum, mean, max, min).</p>
+<div class="env-row"><span class="var-name">z</span> = <span class="var-val">[[[4.0, 4.0, 4.0], [4.0, 4.0, 4.0], [4.0, 4.0, 4.0]], [[4.0, 4.0, 4.0], [4.0, 4.0, 4.0], [4.0, 4.0, 4.0]]]</span></div>
+<p>Old way:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]]</span></div>
+<p>New (einops) way:</p>
+<div class="env-row"><span class="var-name">y</span> = <span class="var-val">[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]</span></div>
+<p>Sometimes, a dimension represents two dimensions</p>
+<div class="env-row"><span class="var-name">y</span> = <span class="var-val">[[4.0, 4.0, 4.0], [4.0, 4.0, 4.0]]</span></div>
+<p>...and you want to operate on one of them.</p>
+<p>...where <code>total_hidden</code> is a flattened representation of <code>heads * hidden1</code></p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0,...</span></div>
+<p>Break up <code>total_hidden</code> into two dimensions (<code>heads</code> and <code>hidden1</code>):</p>
+<p>Perform the transformation by <code>w</code>:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]], [[[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]], [[1.0, 1....</span></div>
+<p>Combine <code>heads</code> and <code>hidden2</code> back together:</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[[4.0, 4.0, 4.0, 4.0], [4.0, 4.0, 4.0, 4.0]], [[4.0, 4.0, 4.0, 4.0], [4.0, 4.0, 4.0, 4.0]], [[4.0, 4.0, 4.0, 4.0], [4.0, 4.0, 4.0, 4.0]]], [[[4.0, 4.0, 4.0, 4.0], [4.0, 4.0, 4.0, 4.0]], [[4.0, 4....</span></div>
+<p>Having gone through all the operations, let us examine their computational cost.</p>
+<div class="env-row"><span class="var-name">x</span> = <span class="var-val">[[[4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0], [4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0], [4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0]], [[4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0], [4.0, 4.0, 4.0, 4.0, 4.0,...</span></div>
+<p>A floating-point operation (FLOP) is a basic operation like addition (x + y) or multiplication (x y).</p>
+<p>Two terribly confusing acronyms (pronounced the same!):</p>
+<ul>
+<li>FLOPs: floating-point operations (measure of computation done)</li>
+</ul>
+<ul>
+<li>FLOP/s: floating-point operations per second (also written as FLOPS), which is used to measure the speed of hardware.</li>
+</ul>
+<h2>Intuitions</h2>
+<p>Training GPT-3 (2020) took 3.14e23 FLOPs.</p>
+<p>Training GPT-4 (2023) is speculated to take 2e25 FLOPs</p>
+<p>US executive order: any foundation model trained with &gt;= 1e26 FLOPs must be reported to the government (revoked in 2025)</p>
+<p>A100 has a peak performance of 312 teraFLOP/s</p>
+<p>H100 has a peak performance of 1979 teraFLOP/s with sparsity, 50% without</p>
+<p>8 H100s for 2 weeks:</p>
+<h2>Linear model</h2>
+<div class="env-row"><span class="var-name">total_flops</span> = <span class="var-val">4.7875968e+21</span></div>
+<p>As motivation, suppose you have a linear model.</p>
+<ul>
+<li>We have n points</li>
+</ul>
+<ul>
+<li>Each point is d-dimsional</li>
+</ul>
+<ul>
+<li>The linear model maps each d-dimensional vector to a k outputs</li>
+</ul>
+<p>We have one multiplication (x[i][j] * w[j][k]) and one addition per (i, j, k) triple.</p>
+<h2>FLOPs of other operations</h2>
+<div class="env-row"><span class="var-name">actual_num_flops</span> = <span class="var-val">33554432</span></div>
+<ul>
+<li>Elementwise operation on a m x n matrix requires O(m n) FLOPs.</li>
+</ul>
+<ul>
+<li>Addition of two m x n matrices requires m n FLOPs.</li>
+</ul>
+<p>In general, no other operation that you&#x27;d encounter in deep learning is as expensive as matrix multiplication for large enough matrices.</p>
+<p>Interpretation:</p>
+<ul>
+<li>B is the number of data points</li>
+</ul>
+<ul>
+<li>(D K) is the number of parameters</li>
+</ul>
+<ul>
+<li>FLOPs for forward pass is 2 (# tokens) (# parameters)</li>
+</ul>
+<p>It turns out this generalizes to Transformers (to a first-order approximation).</p>
+<p>How do our FLOPs calculations translate to wall-clock time (seconds)?</p>
+<p>Let us time it!</p>
+<p>Each GPU has a specification sheet that reports the peak performance.</p>
+<div class="env-row"><span class="var-name">actual_time</span> = <span class="var-val">0.0028583569917827846</span>, <span class="var-name">actual_flop_per_sec</span> = <span class="var-val">11739062719.059378</span></div>
+<ul>
+<li>A100</li>
+</ul>
+<ul>
+<li>H100</li>
+</ul>
+<p>Note that the FLOP/s depends heavily on the data type!</p>
+<p>No CUDA device available, so can&#x27;t get FLOP/s.</p>
+<h2>Model FLOPs utilization (MFU)</h2>
+<div class="env-row"><span class="var-name">promised_flop_per_sec</span> = <span class="var-val">1</span></div>
+<p>Definition: (actual FLOP/s) / (promised FLOP/s) [ignore communication/overhead]</p>
+<p>Usually, MFU of &gt;= 0.5 is quite good (and will be higher if matmuls dominate)</p>
+<div class="env-row"><span class="var-name">mfu</span> = <span class="var-val">11739062719.059378</span></div>
+<p>Let&#x27;s do it with bfloat16:</p>
+<p>No CUDA device available, so can&#x27;t get FLOP/s.</p>
+<div class="env-row"><span class="var-name">bf16_actual_time</span> = <span class="var-val">0.007586554391309619</span>, <span class="var-name">bf16_actual_flop_per_sec</span> = <span class="var-val">4422881623.103702</span></div>
+<p>Note: comparing bfloat16 to float32, the actual FLOP/s is higher.</p>
+<div class="env-row"><span class="var-name">bf16_promised_flop_per_sec</span> = <span class="var-val">1</span>, <span class="var-name">bf16_mfu</span> = <span class="var-val">4422881623.103702</span></div>
+<p>The MFU here is rather low, probably because the promised FLOPs is a bit optimistic.</p>
+<h2>Summary</h2>
+<ul>
+<li>Matrix multiplications dominate: (2 m n p) FLOPs</li>
+</ul>
+<ul>
+<li>FLOP/s depends on hardware (H100 &gt;&gt; A100) and data type (bfloat16 &gt;&gt; float32)</li>
+</ul>
+<ul>
+<li>Model FLOPs utilization (MFU): (actual FLOP/s) / (promised FLOP/s)</li>
+</ul>
+<p>So far, we&#x27;ve constructed tensors (which correspond to either parameters or data) and passed them through operations (forward).</p>
+<p>Now, we&#x27;re going to compute the gradient (backward).</p>
+<p>As a simple example, let&#x27;s consider the simple linear model:</p>
+<p>y = 0.5 (x * w - 5)^2</p>
+<p>Forward pass: compute loss</p>
+<p>Backward pass: compute gradients</p>
+<p>Let us do count the FLOPs for computing gradients.</p>
+<p>Revisit our linear model</p>
+<p>Model: x --w1--&gt; h1 --w2--&gt; h2 -&gt; loss</p>
+<p>Recall the number of forward FLOPs:</p>
+<ul>
+<li>Multiply x[i][j] * w1[j][k]</li>
+</ul>
+<ul>
+<li>Add to h1[i][k]</li>
+</ul>
+<ul>
+<li>Multiply h1[i][j] * w2[j][k]</li>
+</ul>
+<ul>
+<li>Add to h2[i][k]</li>
+</ul>
+<p>How many FLOPs is running the backward pass?</p>
+<div class="env-row"><span class="var-name">num_forward_flops</span> = <span class="var-val">167772160</span></div>
+<p>Recall model: x --w1--&gt; h1 --w2--&gt; h2 -&gt; loss</p>
+<ul>
+<li>h1.grad = d loss / d h1</li>
+</ul>
+<ul>
+<li>h2.grad = d loss / d h2</li>
+</ul>
+<ul>
+<li>w1.grad = d loss / d w1</li>
+</ul>
+<ul>
+<li>w2.grad = d loss / d w2</li>
+</ul>
+<p>Focus on the parameter w2.</p>
+<p>Invoke the chain rule.</p>
+<p>w2.grad[j,k] = sum_i h1[i,j] * h2.grad[i,k]</p>
+<div class="env-row"><span class="var-name">num_backward_flops</span> = <span class="var-val">0</span></div>
+<p>For each (i, j, k), multiply and add.</p>
+<p>h1.grad[i,j] = sum_k w2[j,k] * h2.grad[i,k]</p>
+<div class="env-row"><span class="var-name">num_backward_flops</span> = <span class="var-val">33554432</span></div>
+<p>For each (i, j, k), multiply and add.</p>
+<p>This was for just w2 (D*K parameters).</p>
+<div class="env-row"><span class="var-name">num_backward_flops</span> = <span class="var-val">67108864</span></div>
+<p>Can do it for w1 (D*D parameters) as well (though don&#x27;t need x.grad).</p>
+<p>A nice graphical visualization:</p>
+<div class="env-row"><span class="var-name">num_backward_flops</span> = <span class="var-val">335544320</span></div>
+<div class="img-wrap"><img src="var/files/image-c4037e492b7a4aa56d859f75b243c830-https_miro_medium_com_v2_resize_fit_1400_format_webp_1_VC9y_dHhCKFPXj90Qshj3w_gif" style="max-width: 500px; height: auto;" loading="lazy" /></div>
+<p>Putting it togther:</p>
+<ul>
+<li>Forward pass: 2 (# data points) (# parameters) FLOPs</li>
+</ul>
+<ul>
+<li>Backward pass: 4 (# data points) (# parameters) FLOPs</li>
+</ul>
+<ul>
+<li>Total: 6 (# data points) (# parameters) FLOPs</li>
+</ul>
+<h2>Models</h2>
+<p>Model parameters are stored in PyTorch as <code>nn.Parameter</code> objects.</p>
+<h2>Parameter initialization</h2>
+<p>Let&#x27;s see what happens.</p>
+<p>Note that each element of <code>output</code> scales as sqrt(input_dim): 18.919979095458984.</p>
+<div class="env-row"><span class="var-name">output</span> = <span class="var-val">[18.919979095458984, 151.1260223388672, -167.90870666503906, -58.67540740966797, -127.59276580810547, -15.050365447998047, 263.7569580078125, 99.81633758544922, -204.76751708984375, -112.7846984863...</span></div>
+<p>Large values can cause gradients to blow up and cause training to be unstable.</p>
+<p>We want an initialization that is invariant to <code>input_dim</code>.</p>
+<p>To do that, we simply rescale by 1/sqrt(input_dim)</p>
+<p>Now each element of <code>output</code> is constant: -1.5302726030349731.</p>
+<div class="env-row"><span class="var-name">output</span> = <span class="var-val">[-1.5302726030349731, -0.8698409199714661, -1.7522423267364502, 0.18682101368904114, 1.7271623611450195, 0.13714724779129028, 1.4617953300476074, 1.1139564514160156, 1.1214920282363892, -0.05902940...</span></div>
+<p>Up to a constant, this is Xavier initialization.</p>
+<p>To be extra safe, we truncate the normal distribution to [-3, 3] to avoid any chance of outliers.</p>
+<p>Let&#x27;s build up a simple deep linear model using <code>nn.Parameter</code>.</p>
+<p>Remember to move the model to the GPU.</p>
+<p>Run the model on some data.</p>
+<p>Training loop and best practices</p>
+<p>Randomness shows up in many places: parameter initialization, dropout, data ordering, etc.</p>
+<p>For reproducibility, we recommend you always pass in a different random seed for each use of randomness.</p>
+<p>Determinism is particularly useful when debugging, so you can hunt down the bug.</p>
+<p>There are three places to set the random seed which you should do all at once just to be safe.</p>
+<p>In language modeling, data is a sequence of integers (output by the tokenizer).</p>
+<p>It is convenient to serialize them as numpy arrays (done by the tokenizer).</p>
+<p>You can load them back as numpy arrays.</p>
+<p>Don&#x27;t want to load the entire data into memory at once (LLaMA data is 2.8TB).</p>
+<p>Use memmap to lazily load only the accessed parts into memory.</p>
+<p>A <em>data loader</em> generates a batch of sequences for training.</p>
+<p>Sample <code>batch_size</code> random positions into <code>data</code>.</p>
+<p>Index into the data.</p>
+<h2>Pinned memory</h2>
+<p>By default, CPU tensors are in paged memory. We can explicitly pin.</p>
+<p>This allows us to copy <code>x</code> from CPU into GPU asynchronously.</p>
+<p>This allows us to do two things in parallel (not done here):</p>
+<ul>
+<li>Fetch the next batch of data into CPU</li>
+</ul>
+<ul>
+<li>Process <code>x</code> on the GPU.</li>
+</ul>
+<p>Recall our deep linear model.</p>
+<p>Let&#x27;s define the AdaGrad optimizer</p>
+<ul>
+<li>momentum = SGD + exponential averaging of grad</li>
+</ul>
+<ul>
+<li>AdaGrad = SGD + averaging by grad^2</li>
+</ul>
+<ul>
+<li>RMSProp = AdaGrad + exponentially averaging of grad^2</li>
+</ul>
+<ul>
+<li>Adam = RMSProp + momentum</li>
+</ul>
+<p>AdaGrad:</p>
+<p>Compute gradients</p>
+<div class="env-row"><span class="var-name">state</span> = <span class="var-val">{&#x27;layers.0.weight&#x27;: [[-0.12528929114341736, -0.21693940460681915, 0.4243551790714264, 0.34600457549095154], [-0.15800638496875763, -1.0576096773147583, -0.17806418240070343, 0.21861135959625244], [...</span></div>
+<p>Take a step</p>
+<p>Free up the memory (optional)</p>
+<div class="env-row"><span class="var-name">state</span> = <span class="var-val">{&#x27;layers.0.weight&#x27;: [[-0.1352892816066742, -0.22693940997123718, 0.43435513973236084, 0.3560045659542084], [-0.16800637543201447, -1.0676096677780151, -0.16806429624557495, 0.22861133515834808], [0...</span></div>
+<h2>Memory</h2>
+<h2>Compute (for one step)</h2>
+<div class="env-row"><span class="var-name">num_parameters</span> = <span class="var-val">36</span>, <span class="var-name">num_activations</span> = <span class="var-val">16</span>, <span class="var-name">num_gradients</span> = <span class="var-val">36</span>, <span class="var-name">num_optimizer_states</span> = <span class="var-val">36</span>, <span class="var-name">total_memory</span> = <span class="var-val">496</span></div>
+<h2>Transformers</h2>
+<div class="env-row"><span class="var-name">flops</span> = <span class="var-val">432</span></div>
+<p>The accounting for a Transformer is more complicated, but the same idea.</p>
+<p>Assignment 1 will ask you to do that.</p>
+<p>Blog post describing memory usage for Transformer training</p>
+<p>Blog post descibing FLOPs for a Transformer:</p>
+<p>Generate data from linear function with weights (0, 1, 2, ..., D-1).</p>
+<p>Let&#x27;s do a basic run</p>
+<p>Do some hyperparameter tuning</p>
+<p>Training language models take a long time and certainly will certainly crash.</p>
+<p>You don&#x27;t want to lose all your progress.</p>
+<p>During training, it is useful to periodically save your model and optimizer state to disk.</p>
+<p>Save the checkpoint:</p>
+<p>Load the checkpoint:</p>
+<p>Choice of data type (float32, bfloat16, fp8) have tradeoffs.</p>
+<ul>
+<li>Higher precision: more accurate/stable, more memory, more compute</li>
+</ul>
+<ul>
+<li>Lower precision: less accurate/stable, less memory, less compute</li>
+</ul>
+<p>How can we get the best of both worlds?</p>
+<p>Solution: use float32 by default, but use {bfloat16, fp8} when possible.</p>
+<p>A concrete plan:</p>
+<ul>
+<li>Use {bfloat16, fp8} for the forward pass (activations).</li>
+</ul>
+<ul>
+<li>Use float32 for the rest (parameters, gradients).</li>
+</ul>
+<ul>
+<li>Mixed precision training</li>
+</ul>
+<p>Pytorch has an automatic mixed precision (AMP) library.</p>
+<p>NVIDIA&#x27;s Transformer Engine supports FP8 for linear layers</p>
+<p>Use FP8 pervasively throughout training</p>
+</body>
+</html>

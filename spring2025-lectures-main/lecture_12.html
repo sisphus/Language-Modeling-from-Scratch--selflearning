@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecture 12</title>
+<script>
+MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #222;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #fff;
+}
+h1 { font-size: 2em;   border-bottom: 2px solid #e1e4e8; padding-bottom: .3em; margin-top: 1.6em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #e1e4e8; padding-bottom: .25em; margin-top: 1.6em; }
+h3 { font-size: 1.2em; margin-top: 1.4em; }
+h4, h5, h6 { margin-top: 1.2em; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: .4em; font-weight: 600; color: #111; }
+p  { margin: .45em 0; }
+ul, ol { margin: .4em 0; padding-left: 2.2em; }
+li { margin: .15em 0; }
+a  { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.img-wrap {
+    margin: 1.2em 0;
+    text-align: center;
+}
+.img-wrap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+/* Variable inspection rows */
+.env-row {
+    font-size: .82em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    background: #f0f4ff;
+    border-left: 3px solid #4a90e2;
+    padding: .25em .7em;
+    margin: .25em 0 .6em 1.5em;
+    border-radius: 0 3px 3px 0;
+    color: #333;
+}
+.var-name { color: #6f42c1; font-weight: 600; }
+.var-val  { color: #005cc5; }
+
+@media print {
+    body { padding: 12px; font-size: 12px; }
+    h1, h2 { page-break-after: avoid; }
+    .img-wrap { page-break-inside: avoid; }
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: .75em;
+        color: #666;
+    }
+}
+
+</style>
+</head>
+<body>
+<p><strong>Evaluation</strong>: given a <strong>fixed model</strong>, how &quot;<strong>good</strong>&quot; is it?</p>
+<h2>Benchmark scores</h2>
+<div class="img-wrap"><img src="images/deepseek-r1-benchmarks.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="images/llama4-benchmarks.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="var/files/image-514a4fe0690116810f840ff30c6cdf3f-https_www_datocms-assets_com_64837_1741887109-instruct-1_png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>Recent language models are evaluated on similar, but not entirely identical, benchmarks (MMLU, MATH, etc.).</p>
+<p>What are these benchmarks?</p>
+<p>What do these numbers mean?</p>
+<div class="img-wrap"><img src="images/helm-capabilities-leaderboard.png" style="max-width: 1000px; height: auto;" loading="lazy" /></div>
+<p>Pay close attention to the costs!</p>
+<div class="img-wrap"><img src="images/artificial-analysis.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>Maybe a model is good if people choose to use it (and pay for it)...</p>
+<div class="img-wrap"><img src="images/openrouter.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="images/chatbot-arena-leaderboard.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h2>Vibes</h2>
+<div class="img-wrap"><img src="images/demis-gemini-2.5.png" style="max-width: 500px; height: auto;" loading="lazy" /></div>
+<p>A crisis...</p>
+<div class="img-wrap"><img src="images/karpathy-crisis.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>You might think evaluation is a mechanical process (take existing model, throw prompts at it, average some numbers)...</p>
+<p>Actually, evaluation is a profound and rich topic...</p>
+<p>...and it determines the future of language models.</p>
+<p>What&#x27;s the point of evaluation?</p>
+<p>There is no one true evaluation; it depends on what question you&#x27;re trying to answer.</p>
+<p>1. User or company wants to make a purchase decision (model A or model B) for their use case (e.g., customer service chatbots).</p>
+<p>2. Researchers want to measure the raw capabilities of a model (e.g., intelligence).</p>
+<p>3. We want to understand the benefits + harms of a model (for business and policy reasons).</p>
+<p>4. Model developers want to get feedback to improve the model.</p>
+<p>In each case, there is an abstract <strong>goal</strong> that needs to be translated into a concrete evaluation.</p>
+<p>Framework</p>
+<p>1. What are the <strong>inputs</strong>?</p>
+<p>2. How do <strong>call</strong> the language model?</p>
+<p>3. How do you evaluate the <strong>outputs</strong>?</p>
+<p>4. How to <strong>interpret</strong> the results?</p>
+<p>What are the inputs?</p>
+<p>1. What use cases are <strong>covered</strong>?</p>
+<p>2. Do we have representation of <strong>difficult</strong> inputs in the tail?</p>
+<p>3. Are the inputs <strong>adapted</strong> to the model (e.g., multi-turn)?</p>
+<p>How do you call the language model?</p>
+<p>1. How do you prompt the language model?</p>
+<p>2. Does the language model use chain-of-thought, tools, RAG, etc.?</p>
+<p>3. Are we evaluating the language model or an agentic system (model developer wants former, user wants latter)?</p>
+<p>How do you evaluate the outputs?</p>
+<p>1. Are the reference outputs used for evaluation error-free?</p>
+<p>2. What metrics do you use (e.g., pass@k)?</p>
+<p>3. How do you factor in cost (e.g., inference + training)?</p>
+<p>4. How do you factor in asymmetric errors (e.g., hallucinations in a medical setting)?</p>
+<p>5. How do you handle open-ended generation (no ground truth)?</p>
+<p>How do you inteprret the metrics?</p>
+<p>1. How do you interpret a number (e.g., 91%) - is it ready for deployment?</p>
+<p>2. How do we assess generalization in the face of train-test overlap?</p>
+<p>3. Are we evaluating the final model or the method?</p>
+<p>Summary: lots of questions to think through when doing evaluation</p>
+<p>Recall: that a language model is a probability distribution <strong>p(x)</strong> over sequences of tokens.</p>
+<p>Perplexity (1/p(D))^(1/|D|) measures whether p assigns high probability to some dataset D.</p>
+<p>In pre-training, you minimize perplexity on the training set.</p>
+<p>The obvious thing is to measure perplexity on the test set.</p>
+<p>Standard datasets: Penn Treebank (WSJ), WikiText-103 (Wikipedia), One Billion Word Benchmark (from machine translation WMT11 - EuroParl, UN, news)</p>
+<p>Papers trained on a dataset (training split) and evaluated on the same dataset (test split)</p>
+<p>Pure CNNs+LSTMs on the One Billion Word Benchmark (perplexity 51.3 -&gt; 30.0)</p>
+<p>GPT-2 trained on WebText (40GB text, websites linked from Reddit), zero-shot on standard datasets</p>
+<p>This is out-of-distribution evaluation (but idea is that training covers a lot)</p>
+<div class="img-wrap"><img src="images/gpt2-perplexity.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>Works better on small datasets (transfer is helpful), but not larger datasets (1BW)</p>
+<p>Since GPT-2 and GPT-3, language modeling papers have shifted more towards downstream task accuracy.</p>
+<p>But reasons why perplexity is still useful:</p>
+<ul>
+<li>Smoother than downstream task accuracy (for fitting scaling laws)</li>
+</ul>
+<ul>
+<li>Is universal (why we use it for training) whereas task accuracy might miss some nuances</li>
+</ul>
+<ul>
+<li>Note: can measure conditional perplexity on downstream task too (used for scaling laws)</li>
+</ul>
+<p>Warning (if you&#x27;re running a leaderboard): evaluator needs to trust the language model</p>
+<p>For task accuracy, can just take output generated from a blackbox model and compute the desired metrics</p>
+<p>For perplexity, need LM to generate probabilities and trust that they sum to 1 (even worse with UNKs back in the day)</p>
+<p>The perplexity maximalist view:</p>
+<ul>
+<li>Your true distribution is t, model is p</li>
+</ul>
+<ul>
+<li>Best possible perplexity is H(t) obtained iff p = t</li>
+</ul>
+<ul>
+<li>If have t, then solve all the tasks</li>
+</ul>
+<ul>
+<li>So by pushing down on perplexity, will eventually reach AGI</li>
+</ul>
+<ul>
+<li>Caveat: this might not be the most efficient way to get there (pushing down on parts of the distribution that don&#x27;t matter)</li>
+</ul>
+<p>Things that are spiritually perplexity:</p>
+<p>Similar idea: cloze tasks like LAMBADA</p>
+<div class="img-wrap"><img src="images/lambada.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>HellaSwag</p>
+<div class="img-wrap"><img src="images/hellaswag.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<h3>Massive Multitask Language Understanding (MMLU)</h3>
+<ul>
+<li>57 subjects (e.g., math, US history, law, morality), multiple-choice</li>
+</ul>
+<ul>
+<li>&quot;collected by graduate and undergraduate students from freely available sources online&quot;</li>
+</ul>
+<ul>
+<li>Really about testing knowledge, not language understanding</li>
+</ul>
+<ul>
+<li>Evaluated on GPT-3 using few-shot prompting</li>
+</ul>
+<div class="img-wrap"><img src="images/mmlu.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>MMLU-Pro</h3>
+<ul>
+<li>Removed noisy/trivial questions from MMLU</li>
+</ul>
+<ul>
+<li>Expanded 4 choices to 10 choices</li>
+</ul>
+<ul>
+<li>Evaluated using chain of thought (gives model more of a chance)</li>
+</ul>
+<ul>
+<li>Accuracy of models drop by 16% to 33% (not as saturated)</li>
+</ul>
+<div class="img-wrap"><img src="images/mmlu-pro.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>Graduate-Level Google-Proof Q&amp;A (GPQA)</h3>
+<ul>
+<li>Questions written by 61 PhD contractors from Upwork</li>
+</ul>
+<div class="img-wrap"><img src="images/gpqa.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>PhD experts achieve 65% accuracy</li>
+</ul>
+<ul>
+<li>Non-experts achieve 34% over 30 minutes with access to Google</li>
+</ul>
+<ul>
+<li>GPT-4 achieves 39%</li>
+</ul>
+<h3>Humanity&#x27;s Last Exam</h3>
+<ul>
+<li>2500 questions: multimodal, many subjects, multiple-choice + short-answer</li>
+</ul>
+<div class="img-wrap"><img src="images/hle-examples.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>Awarded $500K prize pool + co-authorship to question creators</li>
+</ul>
+<ul>
+<li>Filtered by frontier LLMs, multiple stages of review</li>
+</ul>
+<div class="img-wrap"><img src="images/hle-pipeline.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="images/hle-results.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>So far, we&#x27;ve been evaluating on fairly structured tasks.</p>
+<p>Instruction following (as popularized by ChatGPT): just follow the instructions.</p>
+<p>Challenge: how to evaluate an open-ended response?</p>
+<h3>Chatbot Arena</h3>
+<p>How it works:</p>
+<ul>
+<li>Random person from the Internet types in prompt</li>
+</ul>
+<ul>
+<li>They get response from two random (anonymized) models</li>
+</ul>
+<ul>
+<li>They rate which one is better</li>
+</ul>
+<ul>
+<li>ELO scores are computed based on the pairwise comparisons</li>
+</ul>
+<ul>
+<li>Features: live (not static) inputs, can accomodate new models</li>
+</ul>
+<div class="img-wrap"><img src="images/chatbot-arena-leaderboard.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>Instruction-Following Eval (IFEval)</h3>
+<div class="img-wrap"><img src="images/ifeval-categories.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<ul>
+<li>Add simple synthetic constraints to instructions</li>
+</ul>
+<ul>
+<li>Constraints can be automatically verified, but not the semantics of the response</li>
+</ul>
+<ul>
+<li>Fairly simple instructions, constraints are a bit artificial</li>
+</ul>
+<h3>AlpacaEval</h3>
+<ul>
+<li>805 instructions from various sources</li>
+</ul>
+<ul>
+<li>Metric: win rate against GPT-4 preview as judged by GPT-4 preview (potential bias)</li>
+</ul>
+<div class="img-wrap"><img src="images/alpacaeval-leaderboard.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<h3>WildBench</h3>
+<ul>
+<li>Sourced 1024 examples from 1M human-chatbot conversations</li>
+</ul>
+<ul>
+<li>Uses GPT-4 turbo as a judge with a checklist (like CoT for judging) + GPT-4 as a judge</li>
+</ul>
+<ul>
+<li>Well-correlated (0.95) with Chatbot Arena (seems to be the de facto sanity check for benchmarks)</li>
+</ul>
+<div class="img-wrap"><img src="images/wildbench.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>Consider tasks that require tool use (e.g., running code) and iterating over a period of time</p>
+<p>Agent = language model + agent scaffolding (logic for deciding how to use the LM)</p>
+<h3>SWEBench</h3>
+<ul>
+<li>2294 tasks across 12 Python repositories</li>
+</ul>
+<ul>
+<li>Given codebase + issue description, submit a PR</li>
+</ul>
+<ul>
+<li>Evaluation metric: unit tests</li>
+</ul>
+<div class="img-wrap"><img src="images/swebench.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>CyBench</h3>
+<ul>
+<li>40 Capture the Flag (CTF) tasks</li>
+</ul>
+<ul>
+<li>Use first-solve time as a measure of difficulty</li>
+</ul>
+<div class="img-wrap"><img src="images/cybench.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="images/cybench-agent.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="images/cybench-results.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>MLEBench</h3>
+<ul>
+<li>75 Kaggle competitions (require training models, processing data, etc.)</li>
+</ul>
+<div class="img-wrap"><img src="images/mlebench.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="images/mlebench-results.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>All of the tasks so far require linguistic and world knowledge</p>
+<p>Can we isolate reasoning from knowledge?</p>
+<p>Arguably, reasoning captures a more pure form of intelligence (isn&#x27;t just about memorizing facts)</p>
+<p>Introduced in 2019 by Francois Chollet</p>
+<p>ARC-AGI-1</p>
+<div class="img-wrap"><img src="var/files/image-d1a33e9159cfdb77197551bbbecc6a76-https_arcprize_org_media_images_arc-task-grids_jpg" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="var/files/image-cb3ca481cdf3a72e48fabc7953f49867-https_arcprize_org_media_images_oseriesleaderboard_png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>ARC-AGI-2: harder</p>
+<div class="img-wrap"><img src="var/files/image-a0338c9fb72d1163cfc8ac66fea4e4ed-https_arcprize_org_media_images_blog_arc-agi-2-unsolved-1_png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="var/files/image-a375cd28c372458baf4135c081a1ce8b-https_www_team-bhp_com_forum_attachments_road-safety_2173645d1625144681-will-crash-test-rating-change-if-higher-variant-chosen-images-30_jpeg" style="max-width: 500px; height: auto;" loading="lazy" /></div>
+<p>What does safety mean for AI?</p>
+<h3>HarmBench</h3>
+<ul>
+<li>Based on 510 harmful behaviors that violate laws or norms</li>
+</ul>
+<h3>AIR-Bench</h3>
+<ul>
+<li>Based on regulatory frameworks and company policies</li>
+</ul>
+<ul>
+<li>Taxonomized into 314 risk categories, 5694 prompts</li>
+</ul>
+<div class="img-wrap"><img src="var/files/image-0195288103aa687af7faedeaca538056-https_crfm_stanford_edu_helm_assets_air-overview-d2e6c49f_png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>Jailbreaking</h3>
+<ul>
+<li>Language models are trained to refuse harmful instructions</li>
+</ul>
+<ul>
+<li>Greedy Coordinate Gradient (GCG) automatically optimizes prompts to bypass safety</li>
+</ul>
+<ul>
+<li>Transfers from open-weight models (Llama) to closed models (GPT-4)</li>
+</ul>
+<div class="img-wrap"><img src="images/gcg-examples.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h3>Pre-deployment testing</h3>
+<ul>
+<li>US Safety Institute + UK AI Safety Institute working together</li>
+</ul>
+<ul>
+<li>Company gives safety institutes access to model before release (currently voluntary)</li>
+</ul>
+<ul>
+<li>Safety institutes run evaluations and produce a report to company</li>
+</ul>
+<h3>But what is safety?</h3>
+<ul>
+<li>Many aspects of safety are strongly contextual (politics, law, social norms - which vary across countries)</li>
+</ul>
+<ul>
+<li>Naively, one might think safety is about refusal and is at odds with capability, but there&#x27;s more...</li>
+</ul>
+<ul>
+<li>Hallucinations in a medical setting makes systems more capable and more safe</li>
+</ul>
+<p>Two aspects of a model that reduce safety: capabilities + propensity</p>
+<ul>
+<li>A system could be capable of doing something, but refuse to do it</li>
+</ul>
+<ul>
+<li>For API models, propensity matters</li>
+</ul>
+<ul>
+<li>For open weight models, capability matters (since can easily fine-tune safety away)</li>
+</ul>
+<p><strong>Dual-use</strong>: capable cybersecurity agents (do well on CyBench) can be used to hack into a system or to do penetration testing</p>
+<p>CyBench is used by the safety institute as a safety evaluation, but is it really a capability evaluation?</p>
+<p>Language models are used heavily in practice:</p>
+<div class="img-wrap"><img src="images/openai-100b-tokens.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="images/cursor-1b-lines.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>However, most existing benchmarks (e.g., MMLU) are far away from real-world use.</p>
+<p>Live traffic from real people contain garbage, that&#x27;s not always what we want either.</p>
+<p>Two types of prompts:</p>
+<p>1. Quizzing: User knows the answer and trying to test the system (think standardized exams).</p>
+<p>2. Asking: User doesn&#x27;t know the answer is trying to use the system to get it.</p>
+<p>Asking is more realistic and produces value for the user.</p>
+<h3>Clio (Anthropic)</h3>
+<ul>
+<li>Use language models to analyze real user data</li>
+</ul>
+<ul>
+<li>Share general patterns of what people are asking</li>
+</ul>
+<div class="img-wrap"><img src="images/clio-table4.png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<h3>MedHELM</h3>
+<ul>
+<li>Previous medical benchmarks were based on standardized exams</li>
+</ul>
+<ul>
+<li>121 clinical tasks sourced from 29 clinicians, mixture of private and public datasets</li>
+</ul>
+<div class="img-wrap"><img src="var/files/image-dd0716ead405df19ab6676c1baa73632-https_crfm_stanford_edu_helm_assets_medhelm-overview-3ddfcd65_png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<p>Unfortunately, realism and privacy are sometimes at odds with each other.</p>
+<p>How do we know our evaluations are valid?</p>
+<h3>Train-test overlap</h3>
+<ul>
+<li>Machine learning 101: don&#x27;t train on your test set</li>
+</ul>
+<ul>
+<li>Pre-foundation models (ImageNet, SQuAD): well-defined train-test splits</li>
+</ul>
+<ul>
+<li>Nowadays: train on the Internet and don&#x27;t tell people about your data</li>
+</ul>
+<p>Route 1: try to infer train-test overlap from model</p>
+<ul>
+<li>Exploit exchangeability of data points</li>
+</ul>
+<div class="img-wrap"><img src="images/contamination-exchangeability.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>Route 2: encourage reporting norms (e.g., people report confidence intervals)</p>
+<ul>
+<li>Model providers should report train-test overlap</li>
+</ul>
+<h3>Dataset quality</h3>
+<ul>
+<li>Fixed up SWE-Bench to produce SWE-Bench Verified</li>
+</ul>
+<ul>
+<li>Create Platinum versions of benchmarks</li>
+</ul>
+<div class="img-wrap"><img src="var/files/image-a1149b095a48ea306dcdea342363230c-https_pbs_twimg_com_media_GjICXQlWkAAYnDS_format_jpg_name_4096x4096" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<div class="img-wrap"><img src="var/files/image-306ae3f862cee7c7842c0b29af3a2f5c-https_pbs_twimg_com_media_GjICcGQXYAAM4o1_format_jpg_name_4096x4096" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>What are we even evaluating?</p>
+<p>In other words, what are the rules of a game?</p>
+<p>Pre-foundation models, we evaluated <strong>methods</strong> (standardized train-test splits).</p>
+<p>Today, we&#x27;re evaluating <strong>models/systems</strong> (anything goes).</p>
+<p>There are some exceptions...</p>
+<p>nanogpt speedrun: fixed data, compute time to get to a particular validation loss</p>
+<div class="img-wrap"><img src="images/karpathy-nanogpt-speedrun.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>DataComp-LM: given a raw dataset, get the best accuracy using standard training pipeline</p>
+<p>Evaluating methods encourage algorithmic innovation from researchers.</p>
+<p>Evaluating models/systems is useful for downstream users.</p>
+<p>Either way, we need to define the rules of the game!</p>
+<p>Takeaways</p>
+<ul>
+<li>There is no one true evaluation; choose the evaluation depending on what you&#x27;re trying to measure.</li>
+</ul>
+<ul>
+<li>Always look at the individual instances and the predictions.</li>
+</ul>
+<ul>
+<li>There are many aspects to consider: capabilities, safety, costs, realism.</li>
+</ul>
+<ul>
+<li>Clearly state the rules of the game (methods versus models/systems).</li>
+</ul>
+</body>
+</html>

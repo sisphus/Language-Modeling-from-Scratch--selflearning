@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecture 01</title>
+<script>
+MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #222;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #fff;
+}
+h1 { font-size: 2em;   border-bottom: 2px solid #e1e4e8; padding-bottom: .3em; margin-top: 1.6em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #e1e4e8; padding-bottom: .25em; margin-top: 1.6em; }
+h3 { font-size: 1.2em; margin-top: 1.4em; }
+h4, h5, h6 { margin-top: 1.2em; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: .4em; font-weight: 600; color: #111; }
+p  { margin: .45em 0; }
+ul, ol { margin: .4em 0; padding-left: 2.2em; }
+li { margin: .15em 0; }
+a  { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.img-wrap {
+    margin: 1.2em 0;
+    text-align: center;
+}
+.img-wrap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+/* Variable inspection rows */
+.env-row {
+    font-size: .82em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    background: #f0f4ff;
+    border-left: 3px solid #4a90e2;
+    padding: .25em .7em;
+    margin: .25em 0 .6em 1.5em;
+    border-radius: 0 3px 3px 0;
+    color: #333;
+}
+.var-name { color: #6f42c1; font-weight: 600; }
+.var-val  { color: #005cc5; }
+
+@media print {
+    body { padding: 12px; font-size: 12px; }
+    h1, h2 { page-break-after: avoid; }
+    .img-wrap { page-break-inside: avoid; }
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: .75em;
+        color: #666;
+    }
+}
+
+</style>
+</head>
+<body>
+<h2>CS336: Language Models From Scratch (Spring 2025)</h2>
+<div class="img-wrap"><img src="images/course-staff.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>This is the second offering of CS336.</p>
+<p>Stanford edition has grown by 50%.</p>
+<p>Lectures will be posted on YouTube and be made available to the whole world.</p>
+<h2>Why did we make this course?</h2>
+<p>Let&#x27;s ask GPT-4</p>
+<p>Problem: researchers are becoming <strong>disconnected</strong> from the underlying technology.</p>
+<div class="env-row"><span class="var-name">response</span> = <span class="var-val">Teaching a course on building language models from scratch provides foundational understanding of natural language processing techniques, fosters innovation, and enables effective adaptation of mod...</span></div>
+<p>8 years ago, researchers would implement and train their own models.</p>
+<p>6 years ago, researchers would download a model (e.g., BERT) and fine-tune it.</p>
+<p>Today, researchers just prompt a proprietary model (e.g., GPT-4/Claude/Gemini).</p>
+<p>Moving up levels of abstractions boosts productivity, but</p>
+<ul>
+<li>These abstractions are leaky (in contrast to programming languages or operating systems).</li>
+</ul>
+<ul>
+<li>There is still fundamental research to be done that require tearing up the stack.</li>
+</ul>
+<p><strong>Full understanding</strong> of this technology is necessary for <strong>fundamental research</strong>.</p>
+<p>This course: <strong>understanding via building</strong></p>
+<p>But there&#x27;s one small problem...</p>
+<h2>The industrialization of language models</h2>
+<div class="img-wrap"><img src="var/files/image-23a59a0326a766e0ce9b5e47c6dcad52-https_upload_wikimedia_org_wikipedia_commons_thumb_c_cc_Industrialisation_jpg_440px-Industrialisation_jpg" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>GPT-4 supposedly has 1.8T parameters.</p>
+<p>GPT-4 supposedly cost $100M to train.</p>
+<p>xAI builds cluster with 200,000 H100s to train Grok.</p>
+<p>Stargate (OpenAI, NVIDIA, Oracle) invests $500B over 4 years.</p>
+<p>Also, there are no public details on how frontier models are built.</p>
+<p>From the GPT-4 technical report:</p>
+<div class="img-wrap"><img src="images/gpt4-no-details.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<h2>More is different</h2>
+<p>Frontier models are out of reach for us.</p>
+<p>But building small language models (&lt;1B parameters in this class) might not be representative of large language models.</p>
+<p>Example 1: fraction of FLOPs spent in attention versus MLP changes with scale.</p>
+<div class="img-wrap"><img src="images/roller-flops.png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>Example 2: emergence of behavior with scale</p>
+<div class="img-wrap"><img src="images/wei-emergence-plot.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<h2>What can we learn in this class that transfers to frontier models?</h2>
+<p>There are three types of knowledge:</p>
+<ul>
+<li><strong>Mechanics</strong>: how things work (what a Transformer is, how model parallelism leverages GPUs)</li>
+</ul>
+<ul>
+<li><strong>Mindset</strong>: squeezing the most out of the hardware, taking scale seriously (scaling laws)</li>
+</ul>
+<ul>
+<li><strong>Intuitions</strong>: which data and modeling decisions yield good accuracy</li>
+</ul>
+<p>We can teach mechanics and mindset (these do transfer).</p>
+<p>We can only partially teach intuitions (do not necessarily transfer across scales).</p>
+<h2>Intuitions? 🤷</h2>
+<p>Some design decisions are simply not (yet) justifiable and just come from experimentation.</p>
+<p>Example: Noam Shazeer paper that introduced SwiGLU</p>
+<div class="img-wrap"><img src="images/divine-benevolence.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<h2>The bitter lesson</h2>
+<p>Wrong interpretation: scale is all that matters, algorithms don&#x27;t matter.</p>
+<p>Right interpretation: algorithms that scale is what matters.</p>
+<h3>accuracy = efficiency x resources</h3>
+<p>In fact, efficiency is way more important at larger scale (can&#x27;t afford to be wasteful).</p>
+<p>showed 44x algorithmic efficiency on ImageNet between 2012 and 2019</p>
+<p>Framing: what is the best model one can build given a certain compute and data budget?</p>
+<p>In other words, <strong>maximize efficiency</strong>!</p>
+<h2>Pre-neural (before 2010s)</h2>
+<ul>
+<li>Language model to measure the entropy of English</li>
+</ul>
+<ul>
+<li>Lots of work on n-gram language models (for machine translation, speech recognition)</li>
+</ul>
+<h2>Neural ingredients (2010s)</h2>
+<ul>
+<li>First neural language model</li>
+</ul>
+<ul>
+<li>Sequence-to-sequence modeling (for machine translation)</li>
+</ul>
+<ul>
+<li>Adam optimizer</li>
+</ul>
+<ul>
+<li>Attention mechanism (for machine translation)</li>
+</ul>
+<ul>
+<li>Transformer architecture (for machine translation)</li>
+</ul>
+<ul>
+<li>Mixture of experts</li>
+</ul>
+<ul>
+<li>Model parallelism</li>
+</ul>
+<h2>Early foundation models (late 2010s)</h2>
+<ul>
+<li>ELMo: pretraining with LSTMs, fine-tuning helps tasks</li>
+</ul>
+<ul>
+<li>BERT: pretraining with Transformer, fine-tuning helps tasks</li>
+</ul>
+<ul>
+<li>Google&#x27;s T5 (11B): cast everything as text-to-text</li>
+</ul>
+<h2>Embracing scaling, more closed</h2>
+<ul>
+<li>OpenAI&#x27;s GPT-2 (1.5B): fluent text, first signs of zero-shot, staged release</li>
+</ul>
+<ul>
+<li>Scaling laws: provide hope / predictability for scaling</li>
+</ul>
+<ul>
+<li>OpenAI&#x27;s GPT-3 (175B): in-context learning, closed</li>
+</ul>
+<ul>
+<li>Google&#x27;s PaLM (540B): massive scale, undertrained</li>
+</ul>
+<ul>
+<li>DeepMind&#x27;s Chinchilla (70B): compute-optimal scaling laws</li>
+</ul>
+<h2>Open models</h2>
+<ul>
+<li>EleutherAI&#x27;s open datasets (The Pile) and models (GPT-J)</li>
+</ul>
+<ul>
+<li>Meta&#x27;s OPT (175B): GPT-3 replication, lots of hardware issues</li>
+</ul>
+<ul>
+<li>Hugging Face / BigScience&#x27;s BLOOM: focused on data sourcing</li>
+</ul>
+<ul>
+<li>Meta&#x27;s Llama models</li>
+</ul>
+<ul>
+<li>Alibaba&#x27;s Qwen models</li>
+</ul>
+<ul>
+<li>DeepSeek&#x27;s models</li>
+</ul>
+<ul>
+<li>AI2&#x27;s OLMo 2</li>
+</ul>
+<h2>Levels of openness</h2>
+<ul>
+<li>Closed models (e.g., GPT-4o): API access only</li>
+</ul>
+<ul>
+<li>Open-weight models (e.g., DeepSeek): weights available, paper with architecture details, some training details, no data details</li>
+</ul>
+<ul>
+<li>Open-source models (e.g., OLMo): weights and data available, paper with most details (but not necessarily the rationale, failed experiments)</li>
+</ul>
+<h2>Today&#x27;s frontier models</h2>
+<ul>
+<li>OpenAI&#x27;s o3</li>
+</ul>
+<ul>
+<li>Anthropic&#x27;s Claude Sonnet 3.7</li>
+</ul>
+<ul>
+<li>xAI&#x27;s Grok 3</li>
+</ul>
+<ul>
+<li>Google&#x27;s Gemini 2.5</li>
+</ul>
+<ul>
+<li>Meta&#x27;s Llama 3.3</li>
+</ul>
+<ul>
+<li>DeepSeek&#x27;s r1</li>
+</ul>
+<ul>
+<li>Alibaba&#x27;s Qwen 2.5 Max</li>
+</ul>
+<ul>
+<li>Tencent&#x27;s Hunyuan-T1</li>
+</ul>
+<p>This is an <em>executable lecture</em>, a program whose execution delivers the content of a lecture.</p>
+<p>Executable lectures make it possible to:</p>
+<ul>
+<li>view and run code (since everything is code!),</li>
+</ul>
+<ul>
+<li>see the hierarchical structure of the lecture, and</li>
+</ul>
+<div class="env-row"><span class="var-name">total</span> = <span class="var-val">6</span>, <span class="var-name">x</span> = <span class="var-val">3</span></div>
+<ul>
+<li>jump to definitions and concepts:</li>
+</ul>
+<p>All information online:</p>
+<p>This is a 5-unit class.</p>
+<p>Comment from Spring 2024 course evaluation: <em>The entire assignment was approximately the same amount of work as all 5 assignments from CS 224n plus the final project. And that&#x27;s just the first homework assignment.</em></p>
+<h2>Why you should take this course</h2>
+<ul>
+<li>You have an obsessive need to understand how things work.</li>
+</ul>
+<ul>
+<li>You want to build up your research engineering muscles.</li>
+</ul>
+<h2>Why you should not take this course</h2>
+<ul>
+<li>You actually want to get research done this quarter.<br>(Talk to your advisor.)</li>
+</ul>
+<ul>
+<li>You are interested in learning about the hottest new techniques in AI (e.g., multimodality, RAG, etc.).<br>(You should take a seminar class for that.)</li>
+</ul>
+<ul>
+<li>You want to get good results on your own application domain.<br>(You should just prompt or fine-tune an existing model.)</li>
+</ul>
+<h2>How you can follow along at home</h2>
+<ul>
+<li>All lecture materials and assignments will be posted online, so feel free to follow on your own.</li>
+</ul>
+<ul>
+<li>Lectures are recorded via <a href="https://cgoe.stanford.edu/" target="_blank">CGOE, formally SCPD</a> and be made available on YouTube (with some lag).</li>
+</ul>
+<ul>
+<li>We plan to offer this class again next year.</li>
+</ul>
+<h2>Assignments</h2>
+<ul>
+<li>5 assignments (basics, systems, scaling laws, data, alignment).</li>
+</ul>
+<ul>
+<li>No scaffolding code, but we provide unit tests and adapter interfaces to help you check correctness.</li>
+</ul>
+<ul>
+<li>Implement locally to test for correctness, then run on cluster for benchmarking (accuracy and speed).</li>
+</ul>
+<ul>
+<li>Leaderboard for some assignments (minimize perplexity given training budget).</li>
+</ul>
+<ul>
+<li>AI tools (e.g., CoPilot, Cursor) can take away from learning, so use at your own risk.</li>
+</ul>
+<h2>Cluster</h2>
+<ul>
+<li>Thanks to Together AI for providing a compute cluster. 🙏</li>
+</ul>
+<ul>
+<li>Please read <a href="https://docs.google.com/document/d/1BSSig7zInyjDKcbNGftVxubiHlwJ-ZqahQewIzBmBOo/edit" target="_blank">the guide</a> on how to use the cluster.</li>
+</ul>
+<ul>
+<li>Start your assignments early, since the cluster will fill up close to the deadline!</li>
+</ul>
+<h2>It&#x27;s all about efficiency</h2>
+<p>Resources: data + hardware (compute, memory, communication bandwidth)</p>
+<p>How do you train the best model given a fixed set of resources?</p>
+<p>Example: given a Common Crawl dump and 32 H100s for 2 weeks, what should you do?</p>
+<p>Design decisions:</p>
+<div class="img-wrap"><img src="images/design-decisions.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<h2>Overview of the course</h2>
+<p>Goal: get a basic version of the full pipeline working</p>
+<p>Components: tokenization, model architecture, training</p>
+<h2>Tokenization</h2>
+<p>Tokenizers convert between strings and sequences of integers (tokens)</p>
+<div class="img-wrap"><img src="images/tokenized-example.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>Intuition: break up string into popular segments</p>
+<p>This course: Byte-Pair Encoding (BPE) tokenizer</p>
+<p>Tokenizer-free approaches:</p>
+<p>Use bytes directly, promising, but have not yet been scaled up to the frontier.</p>
+<h2>Architecture</h2>
+<p>Starting point: original Transformer</p>
+<div class="img-wrap"><img src="images/transformer-architecture.png" style="max-width: 500px; height: auto;" loading="lazy" /></div>
+<p>Variants:</p>
+<ul>
+<li>Activation functions: ReLU, SwiGLU</li>
+</ul>
+<ul>
+<li>Positional encodings: sinusoidal, RoPE</li>
+</ul>
+<ul>
+<li>Normalization: LayerNorm, RMSNorm</li>
+</ul>
+<ul>
+<li>Placement of normalization: pre-norm versus post-norm</li>
+</ul>
+<ul>
+<li>MLP: dense, mixture of experts</li>
+</ul>
+<ul>
+<li>Attention: full, sliding window, linear</li>
+</ul>
+<ul>
+<li>Lower-dimensional attention: group-query attention (GQA), multi-head latent attention (MLA)</li>
+</ul>
+<ul>
+<li>State-space models: Hyena</li>
+</ul>
+<h2>Training</h2>
+<ul>
+<li>Optimizer (e.g., AdamW, Muon, SOAP)</li>
+</ul>
+<ul>
+<li>Learning rate schedule (e.g., cosine, WSD)</li>
+</ul>
+<ul>
+<li>Batch size (e..g, critical batch size)</li>
+</ul>
+<ul>
+<li>Regularization (e.g., dropout, weight decay)</li>
+</ul>
+<ul>
+<li>Hyperparameters (number of heads, hidden dimension): grid search</li>
+</ul>
+<h2>Assignment 1</h2>
+<ul>
+<li>Implement BPE tokenizer</li>
+</ul>
+<ul>
+<li>Implement Transformer, cross-entropy loss, AdamW optimizer, training loop</li>
+</ul>
+<ul>
+<li>Train on TinyStories and OpenWebText</li>
+</ul>
+<ul>
+<li>Leaderboard: minimize OpenWebText perplexity given 90 minutes on a H100</li>
+</ul>
+<p>Goal: squeeze the most out of the hardware</p>
+<p>Components: kernels, parallelism, inference</p>
+<h2>Kernels</h2>
+<p>What a GPU (A100) looks like:</p>
+<div class="img-wrap"><img src="var/files/image-672bd77c57df485d07926615162a44d5-https_miro_medium_com_v2_resize_fit_2000_format_webp_1_6xoBKi5kL2dZpivFe1-zgw_jpeg" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>Analogy: warehouse : DRAM :: factory : SRAM</p>
+<div class="img-wrap"><img src="var/files/image-27f5a4326a831bfe8b3af774827dd675-https_horace_io_img_perf_intro_factory_bandwidth_png" style="max-width: 400px; height: auto;" loading="lazy" /></div>
+<p>Trick: organize computation to maximize utilization of GPUs by minimizing data movement</p>
+<p>Write kernels in CUDA/<strong>Triton</strong>/CUTLASS/ThunderKittens</p>
+<h2>Parallelism</h2>
+<p>What if we have multiple GPUs (8 A100s)?</p>
+<div class="img-wrap"><img src="var/files/image-f92abaa9bd1dcd5fc90c7b74f3b29260-https_www_fibermall_com_blog_wp-content_uploads_2024_09_the-hardware-topology-of-a-typical-8xA100-GPU-host_png" style="max-width: 500px; height: auto;" loading="lazy" /></div>
+<p>Data movement between GPUs is even slower, but same &#x27;minimize data movement&#x27; principle holds</p>
+<p>Use collective operations (e.g., gather, reduce, all-reduce)</p>
+<p>Shard (parameters, activations, gradients, optimizer states) across GPUs</p>
+<p>How to split computation: {data,tensor,pipeline,sequence} parallelism</p>
+<h2>Inference</h2>
+<p>Goal: generate tokens given a prompt (needed to actually use models!)</p>
+<p>Inference is also needed for reinforcement learning, test-time compute, evaluation</p>
+<p>Globally, inference compute (every use) exceeds training compute (one-time cost)</p>
+<p>Two phases: prefill and decode</p>
+<div class="img-wrap"><img src="images/prefill-decode.png" style="max-width: 500px; height: auto;" loading="lazy" /></div>
+<p>Prefill (similar to training): tokens are given, can process all at once (compute-bound)</p>
+<p>Decode: need to generate one token at a time (memory-bound)</p>
+<p>Methods to speed up decoding:</p>
+<ul>
+<li>Use cheaper model (via model pruning, quantization, distillation)</li>
+</ul>
+<ul>
+<li>Speculative decoding: use a cheaper &quot;draft&quot; model to generate multiple tokens, then use the full model to score in parallel (exact decoding!)</li>
+</ul>
+<ul>
+<li>Systems optimizations: KV caching, batching</li>
+</ul>
+<h2>Assignment 2</h2>
+<ul>
+<li>Implement a fused RMSNorm kernel in Triton</li>
+</ul>
+<ul>
+<li>Implement distributed data parallel training</li>
+</ul>
+<ul>
+<li>Implement optimizer state sharding</li>
+</ul>
+<ul>
+<li>Benchmark and profile the implementations</li>
+</ul>
+<p>Goal: do experiments at small scale, predict hyperparameters/loss at large scale</p>
+<p>Question: given a FLOPs budget ($C$), use a bigger model ($N$) or train on more tokens ($D$)?</p>
+<p>Compute-optimal scaling laws:</p>
+<div class="img-wrap"><img src="images/chinchilla-isoflop.png" style="max-width: 800px; height: auto;" loading="lazy" /></div>
+<p>TL;DR: $D^* = 20 N^*$ (e.g., 1.4B parameter model should be trained on 28B tokens)</p>
+<p>But this doesn&#x27;t take into account inference costs!</p>
+<h2>Assignment 3</h2>
+<ul>
+<li>We define a training API (hyperparameters -&gt; loss) based on previous runs</li>
+</ul>
+<ul>
+<li>Submit &quot;training jobs&quot; (under a FLOPs budget) and gather data points</li>
+</ul>
+<ul>
+<li>Fit a scaling law to the data points</li>
+</ul>
+<ul>
+<li>Submit predictions for scaled up hyperparameters</li>
+</ul>
+<ul>
+<li>Leaderboard: minimize loss given FLOPs budget</li>
+</ul>
+<p>Question: What capabilities do we want the model to have?</p>
+<p>Multilingual? Code? Math?</p>
+<div class="img-wrap"><img src="var/files/image-b3aebfa83a900cd491e70acf27806db3-https_ar5iv_labs_arxiv_org_html_2101_00027_assets_pile_chart2_png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<h2>Evaluation</h2>
+<ul>
+<li>Perplexity: textbook evaluation for language models</li>
+</ul>
+<ul>
+<li>Standardized testing (e.g., MMLU, HellaSwag, GSM8K)</li>
+</ul>
+<ul>
+<li>Instruction following (e.g., AlpacaEval, IFEval, WildBench)</li>
+</ul>
+<ul>
+<li>Scaling test-time compute: chain-of-thought, ensembling</li>
+</ul>
+<ul>
+<li>LM-as-a-judge: evaluate generative tasks</li>
+</ul>
+<ul>
+<li>Full system: RAG, agents</li>
+</ul>
+<h2>Data curation</h2>
+<ul>
+<li>Data does not just fall from the sky.</li>
+</ul>
+<div class="env-row"><span class="var-name">urls</span> = <span class="var-val">[&#x27;https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-18/segments/1712296815919.75/warc/CC-MAIN-20240412101354-20240412131354-00000.warc.gz&#x27;, &#x27;https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-...</span></div>
+<p>It&#x27;s a wasteland out there!  Need to really process the data.</p>
+<ul>
+<li>Sources: webpages crawled from the Internet, books, arXiv papers, GitHub code, etc.</li>
+</ul>
+<ul>
+<li>Appeal to fair use to train on copyright data?</li>
+</ul>
+<ul>
+<li>Might have to license data (e.g., Google with Reddit data)</li>
+</ul>
+<ul>
+<li>Formats: HTML, PDF, directories (not text!)</li>
+</ul>
+<h2>Data processing</h2>
+<ul>
+<li>Transformation: convert HTML/PDF to text (preserve content, some structure, rewriting)</li>
+</ul>
+<ul>
+<li>Filtering: keep high quality data, remove harmful content (via classifiers)</li>
+</ul>
+<ul>
+<li>Deduplication: save compute, avoid memorization; use Bloom filters or MinHash</li>
+</ul>
+<h2>Assignment 4</h2>
+<ul>
+<li>Convert Common Crawl HTML to text</li>
+</ul>
+<ul>
+<li>Train classifiers to filter for quality and harmful content</li>
+</ul>
+<ul>
+<li>Deduplication using MinHash</li>
+</ul>
+<ul>
+<li>Leaderboard: minimize perplexity given token budget</li>
+</ul>
+<p>So far, a <strong>base model</strong> is raw potential, very good at completing the next token.</p>
+<p>Alignment makes the model actually useful.</p>
+<p>Goals of alignment:</p>
+<ul>
+<li>Get the language model to follow instructions</li>
+</ul>
+<ul>
+<li>Tune the style (format, length, tone, etc.)</li>
+</ul>
+<ul>
+<li>Incorporate safety (e.g., refusals to answer harmful questions)</li>
+</ul>
+<p>Two phases:</p>
+<h2>Supervised finetuning (SFT)</h2>
+<p>Instruction data: (prompt, response) pairs</p>
+<p>Data often involves human annotation.</p>
+<p>Intuition: base model already has the skills, just need few examples to surface them.</p>
+<p>Supervised learning: fine-tune model to maximize p(response | prompt).</p>
+<p>Now we have a preliminary instruction following model.</p>
+<p>Let&#x27;s make it better without expensive annotation.</p>
+<h2>Preference data</h2>
+<p>Data: generate multiple responses using model (e.g., [A, B]) to a given prompt.</p>
+<p>User provides preferences (e.g., A &lt; B or A &gt; B).</p>
+<h2>Verifiers</h2>
+<ul>
+<li>Formal verifiers (e.g., for code, math)</li>
+</ul>
+<ul>
+<li>Learned verifiers: train against an LM-as-a-judge</li>
+</ul>
+<h2>Algorithms</h2>
+<ul>
+<li>Proximal Policy Optimization (PPO) from reinforcement learning</li>
+</ul>
+<ul>
+<li>Direct Policy Optimization (DPO): for preference data, simpler</li>
+</ul>
+<ul>
+<li>Group Relative Preference Optimization (GRPO): remove value function</li>
+</ul>
+<h2>Assignment 5</h2>
+<ul>
+<li>Implement supervised fine-tuning</li>
+</ul>
+<ul>
+<li>Implement Direct Preference Optimization (DPO)</li>
+</ul>
+<ul>
+<li>Implement Group Relative Preference Optimization (GRPO)</li>
+</ul>
+<h2>Efficiency drives design decisions</h2>
+<p>Today, we are compute-constrained, so design decisions will reflect squeezing the most out of given hardware.</p>
+<ul>
+<li>Data processing: avoid wasting precious compute updating on bad / irrelevant data</li>
+</ul>
+<ul>
+<li>Tokenization: working with raw bytes is elegant, but compute-inefficient with today&#x27;s model architectures.</li>
+</ul>
+<ul>
+<li>Model architecture: many changes motivated by reducing memory or FLOPs (e.g., sharing KV caches, sliding window attention)</li>
+</ul>
+<ul>
+<li>Training: we can get away with a single epoch!</li>
+</ul>
+<ul>
+<li>Scaling laws: use less compute on smaller models to do hyperparameter tuning</li>
+</ul>
+<ul>
+<li>Alignment: if tune model more to desired use cases, require smaller base models</li>
+</ul>
+<p>Tomorrow, we will become data-constrained...</p>
+<p>This unit was inspired by Andrej Karpathy&#x27;s video on tokenization; check it out!</p>
+<p>Raw text is generally represented as Unicode strings.</p>
+<p>A language model places a probability distribution over sequences of tokens (usually represented by integer indices).</p>
+<p>So we need a procedure that <em>encodes</em> strings into tokens.</p>
+<p>We also need a procedure that <em>decodes</em> tokens back into strings.</p>
+<p>Ais a class that implements the encode and decode methods.</p>
+<p>The <strong>vocabulary size</strong> is number of possible tokens (integers).</p>
+<p>To get a feel for how tokenizers work, play with this</p>
+<h2>Observations</h2>
+<ul>
+<li>A word and its preceding space are part of the same token (e.g., &quot; world&quot;).</li>
+</ul>
+<ul>
+<li>A word at the beginning and in the middle are represented differently (e.g., &quot;hello hello&quot;).</li>
+</ul>
+<ul>
+<li>Numbers are tokenized into every few digits.</li>
+</ul>
+<p>Here&#x27;s the GPT-2 tokenizer from OpenAI (tiktoken) in action.</p>
+<p>Check that encode() and decode() roundtrip:</p>
+<div class="env-row"><span class="var-name">string</span> = <span class="var-val">Hello, 🌍! 你好!</span></div>
+<h2>Character-based tokenization</h2>
+<div class="env-row"><span class="var-name">indices</span> = <span class="var-val">[15496, 11, 12520, 234, 235, 0, 220, 19526, 254, 25001, 121, 0]</span>, <span class="var-name">reconstructed_string</span> = <span class="var-val">Hello, 🌍! 你好!</span>, <span class="var-name">num_bytes</span> = <span class="var-val">20</span>, <span class="var-name">num_tokens</span> = <span class="var-val">12</span>, <span class="var-name">compression_ratio</span> = <span class="var-val">1.6666666666666667</span></div>
+<p>A Unicode string is a sequence of Unicode characters.</p>
+<p>Each character can be converted into a code point (integer) via <code>ord</code>.</p>
+<p>It can be converted back via <code>chr</code>.</p>
+<p>Now let&#x27;s build a <code>Tokenizer</code> and make sure it round-trips:</p>
+<p>There are approximately 150K Unicode characters.</p>
+<div class="env-row"><span class="var-name">string</span> = <span class="var-val">Hello, 🌍! 你好!</span>, <span class="var-name">indices</span> = <span class="var-val">[72, 101, 108, 108, 111, 44, 32, 127757, 33, 32, 20320, 22909, 33]</span>, <span class="var-name">reconstructed_string</span> = <span class="var-val">Hello, 🌍! 你好!</span></div>
+<p>Problem 1: this is a very large vocabulary.</p>
+<div class="env-row"><span class="var-name">vocabulary_size</span> = <span class="var-val">127758</span></div>
+<p>Problem 2: many characters are quite rare (e.g., 🌍), which is inefficient use of the vocabulary.</p>
+<h2>Byte-based tokenization</h2>
+<div class="env-row"><span class="var-name">num_bytes</span> = <span class="var-val">20</span>, <span class="var-name">num_tokens</span> = <span class="var-val">13</span>, <span class="var-name">compression_ratio</span> = <span class="var-val">1.5384615384615385</span></div>
+<p>Unicode strings can be represented as a sequence of bytes, which can be represented by integers between 0 and 255.</p>
+<p>The most common Unicode encoding is</p>
+<p>Some Unicode characters are represented by one byte:</p>
+<p>Others take multiple bytes:</p>
+<p>Now let&#x27;s build a <code>Tokenizer</code> and make sure it round-trips:</p>
+<p>The vocabulary is nice and small: a byte can represent 256 values.</p>
+<div class="env-row"><span class="var-name">string</span> = <span class="var-val">Hello, 🌍! 你好!</span>, <span class="var-name">string_bytes</span> = <span class="var-val">b&#x27;Hello, \xf0\x9f\x8c\x8d! \xe4\xbd\xa0\xe5\xa5\xbd!&#x27;</span>, <span class="var-name">indices</span> = <span class="var-val">[72, 101, 108, 108, 111, 44, 32, 240, 159, 140, 141, 33, 32, 228, 189, 160, 229, 165, 189, 33]</span>, <span class="var-name">reconstructed_string</span> = <span class="var-val">Hello, 🌍! 你好!</span></div>
+<p>What about the compression rate?</p>
+<div class="env-row"><span class="var-name">vocabulary_size</span> = <span class="var-val">256</span></div>
+<p>The compression ratio is terrible, which means the sequences will be too long.</p>
+<div class="env-row"><span class="var-name">num_bytes</span> = <span class="var-val">20</span>, <span class="var-name">num_tokens</span> = <span class="var-val">20</span>, <span class="var-name">compression_ratio</span> = <span class="var-val">1.0</span></div>
+<p>Given that the context length of a Transformer is limited (since attention is quadratic), this is not looking great...</p>
+<h2>Word-based tokenization</h2>
+<p>Another approach (closer to what was done classically in NLP) is to split strings into words.</p>
+<p>This regular expression keeps all alphanumeric characters together (words).</p>
+<div class="env-row"><span class="var-name">segments</span> = <span class="var-val">[&#x27;I&#x27;, &quot;&#x27;&quot;, &#x27;ll&#x27;, &#x27; &#x27;, &#x27;say&#x27;, &#x27; &#x27;, &#x27;supercalifragilisticexpialidocious&#x27;, &#x27;!&#x27;]</span></div>
+<p>Here is a fancier version:</p>
+<p>To turn this into a <code>Tokenizer</code>, we need to map these segments into integers.</p>
+<div class="env-row"><span class="var-name">pattern</span> = <span class="var-val">&#x27;(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+</span>, <span class="var-name">segments</span> = <span class="var-val">[&#x27;I&#x27;, &quot;&#x27;ll&quot;, &#x27; say&#x27;, &#x27; supercalifragilisticexpialidocious&#x27;, &#x27;!&#x27;]</span></div>
+<p>Then, we can build a mapping from each segment into an integer.</p>
+<p>But there are problems:</p>
+<ul>
+<li>The number of words is huge (like for Unicode characters).</li>
+</ul>
+<ul>
+<li>Many words are rare and the model won&#x27;t learn much about them.</li>
+</ul>
+<ul>
+<li>This doesn&#x27;t obviously provide a fixed vocabulary size.</li>
+</ul>
+<p>New words we haven&#x27;t seen during training get a special UNK token, which is ugly and can mess up perplexity calculations.</p>
+<h2>Byte Pair Encoding (BPE)</h2>
+<div class="env-row"><span class="var-name">num_bytes</span> = <span class="var-val">44</span>, <span class="var-name">num_tokens</span> = <span class="var-val">5</span>, <span class="var-name">compression_ratio</span> = <span class="var-val">8.8</span></div>
+<p>The BPE algorithm was introduced by Philip Gage in 1994 for data compression.</p>
+<p>It was adapted to NLP for neural machine translation.</p>
+<p>(Previously, papers had been using word-based tokenization.)</p>
+<p>BPE was then used by GPT-2.</p>
+<p>Basic idea: <em>train</em> the tokenizer on raw text to automatically determine the vocabulary.</p>
+<p>Intuition: common sequences of characters are represented by a single token, rare sequences are represented by many tokens.</p>
+<p>The GPT-2 paper used word-based tokenization to break up the text into inital segments and run the original BPE algorithm on each segment.</p>
+<p>Sketch: start with each byte as a token, and successively merge the most common pair of adjacent tokens.</p>
+<h2>Training the tokenizer</h2>
+<p>Start with the list of bytes of <code>string</code>.</p>
+<div class="env-row"><span class="var-name">string</span> = <span class="var-val">the cat in the hat</span>, <span class="var-name">num_merges</span> = <span class="var-val">3</span></div>
+<p>Count the number of occurrences of each pair of tokens</p>
+<div class="env-row"><span class="var-name">indices</span> = <span class="var-val">[116, 104, 101, 32, 99, 97, 116, 32, 105, 110, 32, 116, 104, 101, 32, 104, 97, 116]</span></div>
+<p>Find the most common pair.</p>
+<div class="env-row"><span class="var-name">counts</span> = <span class="var-val">{&#x27;(116, 104)&#x27;: 2, &#x27;(104, 101)&#x27;: 2, &#x27;(101, 32)&#x27;: 2, &#x27;(32, 99)&#x27;: 1, &#x27;(99, 97)&#x27;: 1, &#x27;(97, 116)&#x27;: 2, &#x27;(116, 32)&#x27;: 1, &#x27;(32, 105)&#x27;: 1, &#x27;(105, 110)&#x27;: 1, &#x27;(110, 32)&#x27;: 1, &#x27;(32, 116)&#x27;: 1, &#x27;(32, 104)&#x27;: 1, &#x27;(1...</span></div>
+<p>Merge that pair.</p>
+<div class="env-row"><span class="var-name">pair</span> = <span class="var-val">(116, 104)</span></div>
+<p>Count the number of occurrences of each pair of tokens</p>
+<div class="env-row"><span class="var-name">new_index</span> = <span class="var-val">256</span>, <span class="var-name">merges</span> = <span class="var-val">{&#x27;(116, 104)&#x27;: 256}</span>, <span class="var-name">vocab</span> = <span class="var-val">{&#x27;0&#x27;: &quot;b&#x27;\\x00&#x27;&quot;, &#x27;1&#x27;: &quot;b&#x27;\\x01&#x27;&quot;, &#x27;2&#x27;: &quot;b&#x27;\\x02&#x27;&quot;, &#x27;3&#x27;: &quot;b&#x27;\\x03&#x27;&quot;, &#x27;4&#x27;: &quot;b&#x27;\\x04&#x27;&quot;, &#x27;5&#x27;: &quot;b&#x27;\\x05&#x27;&quot;, &#x27;6&#x27;: &quot;b&#x27;\\x06&#x27;&quot;, &#x27;7&#x27;: &quot;b&#x27;\\x07&#x27;&quot;, &#x27;8&#x27;: &quot;b&#x27;\\x08&#x27;&quot;, &#x27;9&#x27;: &quot;b&#x27;\\t&#x27;&quot;, &#x27;10&#x27;: &quot;b&#x27;\\n&#x27;&quot;, &#x27;11&#x27;: &quot;b&#x27;\\x...</span>, <span class="var-name">indices</span> = <span class="var-val">[256, 101, 32, 99, 97, 116, 32, 105, 110, 32, 256, 101, 32, 104, 97, 116]</span>, <span class="var-name">pair</span> = <span class="var-val">(116, 104)</span>, <span class="var-name">new_indices</span> = <span class="var-val">[]</span>, <span class="var-name">i</span> = <span class="var-val">0</span></div>
+<p>Find the most common pair.</p>
+<div class="env-row"><span class="var-name">counts</span> = <span class="var-val">{&#x27;(256, 101)&#x27;: 2, &#x27;(101, 32)&#x27;: 2, &#x27;(32, 99)&#x27;: 1, &#x27;(99, 97)&#x27;: 1, &#x27;(97, 116)&#x27;: 2, &#x27;(116, 32)&#x27;: 1, &#x27;(32, 105)&#x27;: 1, &#x27;(105, 110)&#x27;: 1, &#x27;(110, 32)&#x27;: 1, &#x27;(32, 256)&#x27;: 1, &#x27;(32, 104)&#x27;: 1, &#x27;(104, 97)&#x27;: 1}</span></div>
+<p>Merge that pair.</p>
+<div class="env-row"><span class="var-name">pair</span> = <span class="var-val">(256, 101)</span></div>
+<p>Count the number of occurrences of each pair of tokens</p>
+<div class="env-row"><span class="var-name">new_index</span> = <span class="var-val">257</span>, <span class="var-name">merges</span> = <span class="var-val">{&#x27;(116, 104)&#x27;: 256, &#x27;(256, 101)&#x27;: 257}</span>, <span class="var-name">vocab</span> = <span class="var-val">{&#x27;0&#x27;: &quot;b&#x27;\\x00&#x27;&quot;, &#x27;1&#x27;: &quot;b&#x27;\\x01&#x27;&quot;, &#x27;2&#x27;: &quot;b&#x27;\\x02&#x27;&quot;, &#x27;3&#x27;: &quot;b&#x27;\\x03&#x27;&quot;, &#x27;4&#x27;: &quot;b&#x27;\\x04&#x27;&quot;, &#x27;5&#x27;: &quot;b&#x27;\\x05&#x27;&quot;, &#x27;6&#x27;: &quot;b&#x27;\\x06&#x27;&quot;, &#x27;7&#x27;: &quot;b&#x27;\\x07&#x27;&quot;, &#x27;8&#x27;: &quot;b&#x27;\\x08&#x27;&quot;, &#x27;9&#x27;: &quot;b&#x27;\\t&#x27;&quot;, &#x27;10&#x27;: &quot;b&#x27;\\n&#x27;&quot;, &#x27;11&#x27;: &quot;b&#x27;\\x...</span>, <span class="var-name">indices</span> = <span class="var-val">[257, 32, 99, 97, 116, 32, 105, 110, 32, 257, 32, 104, 97, 116]</span>, <span class="var-name">pair</span> = <span class="var-val">(256, 101)</span>, <span class="var-name">new_indices</span> = <span class="var-val">[]</span>, <span class="var-name">i</span> = <span class="var-val">0</span></div>
+<p>Find the most common pair.</p>
+<div class="env-row"><span class="var-name">counts</span> = <span class="var-val">{&#x27;(257, 32)&#x27;: 2, &#x27;(32, 99)&#x27;: 1, &#x27;(99, 97)&#x27;: 1, &#x27;(97, 116)&#x27;: 2, &#x27;(116, 32)&#x27;: 1, &#x27;(32, 105)&#x27;: 1, &#x27;(105, 110)&#x27;: 1, &#x27;(110, 32)&#x27;: 1, &#x27;(32, 257)&#x27;: 1, &#x27;(32, 104)&#x27;: 1, &#x27;(104, 97)&#x27;: 1}</span></div>
+<p>Merge that pair.</p>
+<div class="env-row"><span class="var-name">pair</span> = <span class="var-val">(257, 32)</span></div>
+<h2>Using the tokenizer</h2>
+<div class="env-row"><span class="var-name">new_index</span> = <span class="var-val">258</span>, <span class="var-name">merges</span> = <span class="var-val">{&#x27;(116, 104)&#x27;: 256, &#x27;(256, 101)&#x27;: 257, &#x27;(257, 32)&#x27;: 258}</span>, <span class="var-name">vocab</span> = <span class="var-val">{&#x27;0&#x27;: &quot;b&#x27;\\x00&#x27;&quot;, &#x27;1&#x27;: &quot;b&#x27;\\x01&#x27;&quot;, &#x27;2&#x27;: &quot;b&#x27;\\x02&#x27;&quot;, &#x27;3&#x27;: &quot;b&#x27;\\x03&#x27;&quot;, &#x27;4&#x27;: &quot;b&#x27;\\x04&#x27;&quot;, &#x27;5&#x27;: &quot;b&#x27;\\x05&#x27;&quot;, &#x27;6&#x27;: &quot;b&#x27;\\x06&#x27;&quot;, &#x27;7&#x27;: &quot;b&#x27;\\x07&#x27;&quot;, &#x27;8&#x27;: &quot;b&#x27;\\x08&#x27;&quot;, &#x27;9&#x27;: &quot;b&#x27;\\t&#x27;&quot;, &#x27;10&#x27;: &quot;b&#x27;\\n&#x27;&quot;, &#x27;11&#x27;: &quot;b&#x27;\\x...</span>, <span class="var-name">indices</span> = <span class="var-val">[258, 99, 97, 116, 32, 105, 110, 32, 258, 104, 97, 116]</span>, <span class="var-name">pair</span> = <span class="var-val">(257, 32)</span>, <span class="var-name">new_indices</span> = <span class="var-val">[]</span>, <span class="var-name">i</span> = <span class="var-val">0</span></div>
+<p>Now, given a new text, we can encode it.</p>
+<p>In Assignment 1, you will go beyond this in the following ways:</p>
+<div class="env-row"><span class="var-name">string</span> = <span class="var-val">the quick brown fox</span>, <span class="var-name">indices</span> = <span class="var-val">[258, 113, 117, 105, 99, 107, 32, 98, 114, 111, 119, 110, 32, 102, 111, 120]</span>, <span class="var-name">pair</span> = <span class="var-val">(257, 32)</span>, <span class="var-name">new_index</span> = <span class="var-val">258</span>, <span class="var-name">new_indices</span> = <span class="var-val">[]</span>, <span class="var-name">i</span> = <span class="var-val">0</span>, <span class="var-name">bytes_list</span> = <span class="var-val">[&quot;b&#x27;the &#x27;&quot;, &quot;b&#x27;q&#x27;&quot;, &quot;b&#x27;u&#x27;&quot;, &quot;b&#x27;i&#x27;&quot;, &quot;b&#x27;c&#x27;&quot;, &quot;b&#x27;k&#x27;&quot;, &quot;b&#x27; &#x27;&quot;, &quot;b&#x27;b&#x27;&quot;, &quot;b&#x27;r&#x27;&quot;, &quot;b&#x27;o&#x27;&quot;, &quot;b&#x27;w&#x27;&quot;, &quot;b&#x27;n&#x27;&quot;, &quot;b&#x27; &#x27;&quot;, &quot;b&#x27;f&#x27;&quot;, &quot;b&#x27;o&#x27;&quot;, &quot;b&#x27;x&#x27;&quot;]</span>, <span class="var-name">reconstructed_string</span> = <span class="var-val">the quick brown fox</span></div>
+<ul>
+<li>encode() currently loops over all merges. Only loop over merges that matter.</li>
+</ul>
+<ul>
+<li>Detect and preserve special tokens (e.g., &lt;|endoftext|&gt;).</li>
+</ul>
+<ul>
+<li>Use pre-tokenization (e.g., the GPT-2 tokenizer regex).</li>
+</ul>
+<ul>
+<li>Try to make the implementation as fast as possible.</li>
+</ul>
+<h2>Summary</h2>
+<ul>
+<li>Tokenizer: strings &lt;-&gt; tokens (indices)</li>
+</ul>
+<ul>
+<li>Character-based, byte-based, word-based tokenization highly suboptimal</li>
+</ul>
+<ul>
+<li>BPE is an effective heuristic that looks at corpus statistics</li>
+</ul>
+<ul>
+<li>Tokenization is a necessary evil, maybe one day we&#x27;ll just do it from bytes...</li>
+</ul>
+<p>Next time: PyTorch building blocks, resource accounting</p>
+</body>
+</html>

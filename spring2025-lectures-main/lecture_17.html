@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lecture 17</title>
+<script>
+MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #222;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #fff;
+}
+h1 { font-size: 2em;   border-bottom: 2px solid #e1e4e8; padding-bottom: .3em; margin-top: 1.6em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #e1e4e8; padding-bottom: .25em; margin-top: 1.6em; }
+h3 { font-size: 1.2em; margin-top: 1.4em; }
+h4, h5, h6 { margin-top: 1.2em; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: .4em; font-weight: 600; color: #111; }
+p  { margin: .45em 0; }
+ul, ol { margin: .4em 0; padding-left: 2.2em; }
+li { margin: .15em 0; }
+a  { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.img-wrap {
+    margin: 1.2em 0;
+    text-align: center;
+}
+.img-wrap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+
+/* Variable inspection rows */
+.env-row {
+    font-size: .82em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    background: #f0f4ff;
+    border-left: 3px solid #4a90e2;
+    padding: .25em .7em;
+    margin: .25em 0 .6em 1.5em;
+    border-radius: 0 3px 3px 0;
+    color: #333;
+}
+.var-name { color: #6f42c1; font-weight: 600; }
+.var-val  { color: #005cc5; }
+
+@media print {
+    body { padding: 12px; font-size: 12px; }
+    h1, h2 { page-break-after: avoid; }
+    .img-wrap { page-break-inside: avoid; }
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: .75em;
+        color: #666;
+    }
+}
+
+</style>
+</head>
+<body>
+<p>Last lecture: overview of RL from verifiable rewards (policy gradient)</p>
+<p>This lecture: deep dive into the mechanics of policy gradient (e.g., GRPO)</p>
+<p><strong>State</strong> s: prompt + generated response so far</p>
+<p><strong>Action</strong> a: generate next token</p>
+<p><strong>Rewards</strong> R: how good the response is; we&#x27;ll focus on:</p>
+<ul>
+<li>Outcome rewards, which depend on the entire response</li>
+</ul>
+<ul>
+<li>Verifiable rewards, whose computation is deterministic</li>
+</ul>
+<ul>
+<li>Notions of discounting and bootstrapping are less applicable</li>
+</ul>
+<p>Example: &quot;... Therefore, the answer is 3 miles.&quot;</p>
+<p><strong>Transition probabilities</strong> T(s&#x27; | s, a): deterministic s&#x27; = s + a</p>
+<ul>
+<li>Can do planning / test-time compute (unlike in robotics)</li>
+</ul>
+<ul>
+<li>States are really made up (different from robotics), so a lot of flexibility</li>
+</ul>
+<p><strong>Policy</strong> π(a | s): just a language model (fine-tuned)</p>
+<p><strong>Rollout/episode/trajectory</strong>: s → a → ... → a → a → R</p>
+<p><strong>Objective</strong>: maximize expected reward E[R]</p>
+<p>(where the expectation is taken over prompts s and response tokens a)</p>
+<p>For notational simplicity, let <em>a</em> denote the entire response.</p>
+<p>We want to maximize expected reward with respect to the policy π:</p>
+<p>E[R] = ∫ p(s) π(a | s) R(s, a)</p>
+<p>Obvious thing to do is to take the gradient:</p>
+<p>∇ E[R] = ∫ p(s) ∇ π(a | s) R(s, a)</p>
+<p>∇ E[R] = ∫ p(s) π(a | s) ∇ log π(a | s) R(s, a)</p>
+<p>∇ E[R] = E[∇ log π(a | s) R(s, a)]</p>
+<p>Naive policy gradient:</p>
+<ul>
+<li>Sample prompt s, sample response a ~ π(a | s)</li>
+</ul>
+<ul>
+<li>Update parameters based on ∇ log π(a | s) R(s, a) (same as SFT, but weighted by R(s, a))</li>
+</ul>
+<p>Setting: R(s, a) ∈ {0, 1} = whether response is correct or not</p>
+<ul>
+<li>Naive policy gradient only updates on correct responses</li>
+</ul>
+<ul>
+<li>Like SFT, but dataset changing over time as policy changes</li>
+</ul>
+<p>Challenge: high noise/variance</p>
+<p>In this setting, sparse rewards (few responses get reward 1, most get 0)</p>
+<p>In contrast: in RLHF, reward models (learned from pairwise preferences) are more continuous</p>
+<h3>Baselines</h3>
+<p>Recall ∇ E[R] = E[∇ log π(a | s) R(s, a)]</p>
+<p>∇ log π(a | s) R(s, a) is an unbiased estimate of ∇ E[R], but maybe there are others with lower variance...</p>
+<p>Example: two states</p>
+<ul>
+<li>s1: a1 → reward 11, a2 → reward 9</li>
+</ul>
+<ul>
+<li>s2: a1 → reward 0, a2 → reward 2</li>
+</ul>
+<p>Don&#x27;t want s1 → a2 (reward 9) because a1 is better, want s2 → a2 (reward 2), but 9 &gt; 2</p>
+<p>Idea: maximize the baselined reward: E[R - b(s)]</p>
+<p>This is just E[R] shifted by a constant E[b(s)] that doesn&#x27;t depend on the policy π</p>
+<p>We update based on ∇ log π(a | s) (R(s, a) - b(s))</p>
+<p>What b(s) should we use?</p>
+<p>Example: two states</p>
+<p>Assuming uniform distribution over (s, a) and |∇ π(a | s)| = 1</p>
+<p>Define baseline b(s1) = 10, b(s2) = 1</p>
+<div class="env-row"><span class="var-name">naive_variance</span> = <span class="var-val">5.322906494140625</span></div>
+<p>Variance reduced from 5.323 to 1.155</p>
+<div class="env-row"><span class="var-name">baseline_variance</span> = <span class="var-val">1.154700517654419</span></div>
+<p>Optimal b*(s) = E[(∇ π(a | s))^2 R | s] / E[(∇ π(a | s))^2 | s] (for one-parameter models)</p>
+<p>This is difficult to compute...</p>
+<p>...so heuristic is to use the mean reward:</p>
+<p>b(s) = E[R | s]</p>
+<p>This is still hard to compute and must be estimated.</p>
+<h3>Advantage functions</h3>
+<p>This choice of b(s) has connections to advantage functions.</p>
+<ul>
+<li>V(s) = E[R | s] = expected reward from state s</li>
+</ul>
+<ul>
+<li>Q(s, a) = E[R | s, a] = expected reward from state s taking action a</li>
+</ul>
+<p>(Note: Q and R are the same here, because we&#x27;re assuming <em>a</em> has all actions and we have outcome rewards.)</p>
+<p>Definition (advantage): A(s, a) = Q(s, a) - V(s)</p>
+<p>Intuition: how much better is action a than expected from state s</p>
+<p>If b(s) = E[R | s], then the baselined reward is identical to the advantage!</p>
+<p>E[R - b(s)] = A(s, a)</p>
+<p>In general:</p>
+<ul>
+<li>Ideal: E[∇ log π(a | s) R(s, a)]</li>
+</ul>
+<ul>
+<li>Estimate: ∇ log π(a | s) δ</li>
+</ul>
+<p>There are multiple choices of δ, as we&#x27;ll see later.</p>
+<p>Group Relative Policy Optimization (GRPO)</p>
+<ul>
+<li>Simplification to PPO that removes the critic (value function)</li>
+</ul>
+<ul>
+<li>Leverages the group structure in the LM setting (multiple responses per prompt), which provides a natural baseline b(s).</li>
+</ul>
+<div class="img-wrap"><img src="images/grpo-algorithm.png" style="max-width: 700px; height: auto;" loading="lazy" /></div>
+<p>Task: sorting n numbers</p>
+<p>Prompt: n numbers</p>
+<p>Response: n numbers</p>
+<p>Reward should capture how close to sorted the response is.</p>
+<p>Define a reward that returns the number of positions where the response matches the ground truth.</p>
+<p>Define an alternative reward that gives more partial credit.</p>
+<div class="env-row"><span class="var-name">prompt</span> = <span class="var-val">[3, 1, 0, 2]</span>, <span class="var-name">response</span> = <span class="var-val">[0, 1, 2, 3]</span>, <span class="var-name">reward</span> = <span class="var-val">1</span></div>
+<p>Note that the second reward function provides more credit to the 3rd response than the first reward function.</p>
+<div class="env-row"><span class="var-name">prompt</span> = <span class="var-val">[3, 1, 0, 2]</span>, <span class="var-name">response</span> = <span class="var-val">[0, 1, 2, 3]</span>, <span class="var-name">inclusion_reward</span> = <span class="var-val">4</span>, <span class="var-name">ordering_reward</span> = <span class="var-val">3</span>, <span class="var-name">reward</span> = <span class="var-val">6</span></div>
+<p>Define a simple model that maps prompts to responses</p>
+<ul>
+<li>Assume fixed prompt and response length</li>
+</ul>
+<ul>
+<li>Captures positional information with separate per-position parameters</li>
+</ul>
+<ul>
+<li>Decode each position in the response independently (not autoregressive)</li>
+</ul>
+<p>Start with a prompt s</p>
+<p>Generate responses a</p>
+<p>Compute rewards R of these responses:</p>
+<div class="env-row"><span class="var-name">responses</span> = <span class="var-val">[[[1, 1, 1], [1, 2, 1], [1, 2, 1], [1, 1, 2], [1, 2, 1]]]</span></div>
+<p>Compute deltas δ given the rewards R (for performing the updates)</p>
+<div class="env-row"><span class="var-name">prompt</span> = <span class="var-val">[1, 0, 2]</span>, <span class="var-name">response</span> = <span class="var-val">[1, 2, 1]</span>, <span class="var-name">inclusion_reward</span> = <span class="var-val">2</span>, <span class="var-name">ordering_reward</span> = <span class="var-val">1</span>, <span class="var-name">rewards</span> = <span class="var-val">[[3.0, 3.0, 3.0, 4.0, 3.0]]</span></div>
+<p>Compute log probabilities of these responses:</p>
+<div class="env-row"><span class="var-name">rewards</span> = <span class="var-val">[[3.0, 3.0, 3.0, 4.0, 3.0]]</span>, <span class="var-name">deltas</span> = <span class="var-val">[[0.0, 0.0, 0.0, 4.0, 0.0]]</span>, <span class="var-name">mean_rewards</span> = <span class="var-val">[[3.200000047683716]]</span>, <span class="var-name">centered_rewards</span> = <span class="var-val">[[-0.20000004768371582, -0.20000004768371582, -0.20000004768371582, 0.7999999523162842, -0.20000004768371582]]</span>, <span class="var-name">std_rewards</span> = <span class="var-val">[[0.4472135901451111]]</span>, <span class="var-name">normalized_rewards</span> = <span class="var-val">[[-0.44720369577407837, -0.44720369577407837, -0.44720369577407837, 1.7888141870498657, -0.44720369577407837]]</span></div>
+<p>Compute loss so that we can use to update the model parameters</p>
+<div class="env-row"><span class="var-name">log_probs</span> = <span class="var-val">[[[-0.01567213609814644, -1.005124807357788, -0.05150599032640457], [-0.01567213609814644, -0.8296878337860107, -0.05150599032640457], [-0.01567213609814644, -0.8296878337860107, -0.051505990326404...</span></div>
+<p>Motivation: in GRPO you&#x27;ll see ratios: p(a | s) / p_old(a | s)</p>
+<div class="env-row"><span class="var-name">loss</span> = <span class="var-val">1.0701297521591187</span></div>
+<p>When you&#x27;re optimizing, it is important to freeze and not differentiate through p_old</p>
+<p>Do it properly:</p>
+<div class="env-row"><span class="var-name">grad</span> = <span class="var-val">0.0</span></div>
+<p>Sometimes, we can use an explicit KL penalty to regularize the model.</p>
+<div class="env-row"><span class="var-name">grad</span> = <span class="var-val">0.11920296400785446</span>, <span class="var-name">loss</span> = <span class="var-val">-0.5361258387565613</span></div>
+<p>This can be useful if you want RL a new capability into a model, but you don&#x27;t want it to forget its original capabilities.</p>
+<p>KL(p || q) = E_{x ~ p}[log(p(x)/q(x))]</p>
+<p>KL(p || q) = E_{x ~ p}[-log(q(x)/p(x))]</p>
+<p>KL(p || q) = E_{x ~ p}[q(x)/p(x) - log(q(x)/p(x)) - 1] because E_{x ~ p}[q(x)/p(x)] = 1</p>
+<p>Summary:</p>
+<div class="env-row"><span class="var-name">kl_penalty</span> = <span class="var-val">1.9032036066055298</span></div>
+<ul>
+<li>Generate responses</li>
+</ul>
+<ul>
+<li>Compute rewards R and δ (rewards, centered rewards, normalized rewards, max rewards)</li>
+</ul>
+<ul>
+<li>Compute log probs of responses</li>
+</ul>
+<ul>
+<li>Compute loss from log probs and δ (naive, unclipped, clipped)</li>
+</ul>
+<p>Let&#x27;s now define the GRPO algorithm.</p>
+<p>Let&#x27;s actually train some models.</p>
+<div class="env-row"><span class="var-name">prompt</span> = <span class="var-val">[1, 2, 3]</span>, <span class="var-name">response</span> = <span class="var-val">[2, 4, 1]</span>, <span class="var-name">inclusion_reward</span> = <span class="var-val">2</span>, <span class="var-name">ordering_reward</span> = <span class="var-val">1</span>, <span class="var-name">rewards</span> = <span class="var-val">[[2.0, 2.0, 3.0, 3.0, 2.0, 3.0, 2.0, 2.0, 2.0, 2.0], [2.0, 1.0, 2.0, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0, 2.0], [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]]</span>, <span class="var-name">loss</span> = <span class="var-val">1.1641370058059692</span></div>
+<p>Let&#x27;s start with updating based on raw rewards.</p>
+<div class="img-wrap"><img src="var/policy_gradient_rewards_naive.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>Looking through the output, you&#x27;ll see that by the end, we haven&#x27;t really learned sorting very well (and this is still the training set).</p>
+<p>Let&#x27;s try using centered rewards.</p>
+<div class="img-wrap"><img src="var/policy_gradient_centered_rewards_naive.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>This seems to help, as:</p>
+<ul>
+<li>Suboptimal rewards get a negative gradient update, and</li>
+</ul>
+<ul>
+<li>If all the responses for a given prompt have the same reward, then we don&#x27;t update.</li>
+</ul>
+<p>Overall, this is better, but we&#x27;re still getting stuck in local optima.</p>
+<p>Finally, let&#x27;s try normalizing by the standard deviation.</p>
+<div class="img-wrap"><img src="var/policy_gradient_normalized_rewards_naive.png" style="max-width: 600px; height: auto;" loading="lazy" /></div>
+<p>There is not much difference here, and indeed, variants like Dr. GRPO do not perform this normalization to avoid length bias (not an issue here since all responses have the same length.</p>
+<p>Overall, as you can see, reinforcement learning is not trivial, and you can easily get stuck in suboptimal states.</p>
+<p>The hyperparameters could probably be tuned better...</p>
+<p>Summary</p>
+<ul>
+<li>Reinforcement learning is the key to surpassing human abilities</li>
+</ul>
+<ul>
+<li><strong>If</strong> you can measure it, you can optimize it</li>
+</ul>
+<ul>
+<li>Policy gradient framework is conceptually clear, just need baselines to reduce variance</li>
+</ul>
+<ul>
+<li>RL systems is much more complex than pretraining (inference workloads, manage multiple models)</li>
+</ul>
+<p>Final two lectures:</p>
+<ul>
+<li>Junyang Lin (Qwen)</li>
+</ul>
+<ul>
+<li>Mike Lewis (Llama)</li>
+</ul>
+</body>
+</html>
